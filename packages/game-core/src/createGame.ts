@@ -44,5 +44,6 @@ export function createGame(params: CreateGameParams): GameState {
     direction: 1,
     currentColor: firstDiscard.color,
     status: "playing",
+    drawStack: 0,
   };
 }

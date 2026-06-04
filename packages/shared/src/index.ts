@@ -38,4 +38,6 @@ export interface GameState {
   direction: 1 | -1;
   currentColor: CardColor;
   status: "waiting" | "playing" | "finished";
+
+  drawStack: number;
 }
