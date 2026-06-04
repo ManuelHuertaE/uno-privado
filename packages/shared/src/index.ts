@@ -22,3 +22,20 @@ export interface Card {
   color: CardColor;
   value: CardValue;
 }
+
+export interface Player {
+  id: string;
+  name: string;
+  hand: Card[];
+}
+
+export interface GameState {
+  id: string;
+  players: Player[];
+  drawPile: Card[];
+  discardPile: Card[];
+  currentPlayerIndex: number;
+  direction: 1 | -1;
+  currentColor: CardColor;
+  status: "waiting" | "playing" | "finished";
+}
