@@ -258,6 +258,9 @@ importers:
 
   apps/server:
     dependencies:
+      '@uno/game-core':
+        specifier: workspace:*
+        version: link:../../packages/game-core
       cors:
         specifier: ^2.8.6
         version: 2.8.6
@@ -284,7 +287,11 @@ importers:
         specifier: ~6.0.3
         version: 6.0.3
 
-  packages/game-core: {}
+  packages/game-core:
+    dependencies:
+      '@uno/shared':
+        specifier: workspace:*
+        version: link:../shared
 
   packages/shared: {}
 
