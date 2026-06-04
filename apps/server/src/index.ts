@@ -1,15 +1,15 @@
 import express from "express";
-import { createDeck } from "@uno/game-core";
+import { createDeck, shuffleDeck } from "@uno/game-core";
 
 const app = express();
 
 app.get("/", (_req, res) => {
-  const deck = createDeck();
+  const deck = shuffleDeck(createDeck());
 
   res.json({
     message: "Servidor UNO funcionando",
     totalCards: deck.length,
-    firstCards: deck.slice(0, 5),
+    firstCards: deck.slice(0, 10),
   });
 });
 
