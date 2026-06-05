@@ -1,84 +1,180 @@
 import express from "express";
-import { createGame, drawCards, playCard } from "@uno/game-core";
+import { createGame, playCard } from "@uno/game-core";
 
 const app = express();
 
-app.get("/", (_req, res) => {
-  let game = createGame({
+function createTestGame() {
+  return createGame({
     players: [
       { id: "player-1", name: "Manuel" },
       { id: "player-2", name: "Jugador 2" },
+      { id: "player-3", name: "Jugador 3" },
     ],
   });
+}
 
-  const player1 = game.players[0];
-  const player2 = game.players[1];
+app.get("/test-skip", (_req, res) => {
+  let game = createTestGame();
 
-  const draw2Card = player1.hand.find((card) => card.value === "draw2");
-
-  if (!draw2Card) {
-    res.json({
-      message:
-        "Jugador 1 no tiene una carta +2. Refresca la página para generar otra partida.",
-      player1Hand: player1.hand,
-    });
-
-    return;
-  }
+  const card = {
+    id: "test-skip",
+    color: "red",
+    value: "skip",
+  } as const;
 
   game = {
     ...game,
-    currentColor: draw2Card.color,
+    currentPlayerIndex: 0,
+    currentColor: "red",
+    players: game.players.map((player, index) =>
+      index === 0 ? { ...player, hand: [card, ...player.hand] } : player
+    ),
   };
 
-  const beforePlayCard = {
-    currentPlayerIndex: game.currentPlayerIndex,
+  const before = {
     currentPlayer: game.players[game.currentPlayerIndex].name,
-    player1Cards: game.players[0].hand.length,
-    player2Cards: game.players[1].hand.length,
-    drawPile: game.drawPile.length,
-    drawStack: game.drawStack,
-    cardToPlay: draw2Card,
   };
 
   game = playCard({
     game,
-    playerId: player1.id,
-    cardId: draw2Card.id,
+    playerId: "player-1",
+    cardId: card.id,
   });
-
-  const afterPlayCard = {
-    currentPlayerIndex: game.currentPlayerIndex,
-    currentPlayer: game.players[game.currentPlayerIndex].name,
-    player1Cards: game.players[0].hand.length,
-    player2Cards: game.players[1].hand.length,
-    drawPile: game.drawPile.length,
-    drawStack: game.drawStack,
-    topCard: game.discardPile.at(-1),
-  };
-
-  game = drawCards({
-    game,
-    playerId: player2.id,
-    amount: game.drawStack,
-    clearDrawStack: true,
-    advanceTurn: true,
-  });
-
-  const afterDrawCards = {
-    currentPlayerIndex: game.currentPlayerIndex,
-    currentPlayer: game.players[game.currentPlayerIndex].name,
-    player1Cards: game.players[0].hand.length,
-    player2Cards: game.players[1].hand.length,
-    drawPile: game.drawPile.length,
-    drawStack: game.drawStack,
-  };
 
   res.json({
-    message: "Prueba completa: jugador 1 tira +2 y jugador 2 roba",
-    beforePlayCard,
-    afterPlayCard,
-    afterDrawCards,
+    message: "Prueba de skip",
+    before,
+    after: {
+      currentPlayer: game.players[game.currentPlayerIndex].name,
+      currentColor: game.currentColor,
+      topCard: game.discardPile[game.discardPile.length - 1],
+    },
+  });
+});
+
+app.get("/test-reverse", (_req, res) => {
+  let game = createTestGame();
+
+  const card = {
+    id: "test-reverse",
+    color: "blue",
+    value: "reverse",
+  } as const;
+
+  game = {
+    ...game,
+    currentPlayerIndex: 0,
+    currentColor: "blue",
+    players: game.players.map((player, index) =>
+      index === 0 ? { ...player, hand: [card, ...player.hand] } : player
+    ),
+  };
+
+  const before = {
+    currentPlayer: game.players[game.currentPlayerIndex].name,
+    direction: game.direction,
+  };
+
+  game = playCard({
+    game,
+    playerId: "player-1",
+    cardId: card.id,
+  });
+
+  res.json({
+    message: "Prueba de reverse",
+    before,
+    after: {
+      currentPlayer: game.players[game.currentPlayerIndex].name,
+      direction: game.direction,
+      currentColor: game.currentColor,
+      topCard: game.discardPile[game.discardPile.length - 1],
+    },
+  });
+});
+
+app.get("/test-wild", (_req, res) => {
+  let game = createTestGame();
+
+  const card = {
+    id: "test-wild",
+    color: "wild",
+    value: "wild",
+  } as const;
+
+  game = {
+    ...game,
+    currentPlayerIndex: 0,
+    currentColor: "red",
+    players: game.players.map((player, index) =>
+      index === 0 ? { ...player, hand: [card, ...player.hand] } : player
+    ),
+  };
+
+  const before = {
+    currentPlayer: game.players[game.currentPlayerIndex].name,
+    currentColor: game.currentColor,
+  };
+
+  game = playCard({
+    game,
+    playerId: "player-1",
+    cardId: card.id,
+    chosenColor: "yellow",
+  });
+
+  res.json({
+    message: "Prueba de wild con chosenColor",
+    before,
+    after: {
+      currentPlayer: game.players[game.currentPlayerIndex].name,
+      currentColor: game.currentColor,
+      topCard: game.discardPile[game.discardPile.length - 1],
+    },
+  });
+});
+
+app.get("/test-wild-draw4", (_req, res) => {
+  let game = createTestGame();
+
+  const card = {
+    id: "test-wild-draw4",
+    color: "wild",
+    value: "wildDraw4",
+  } as const;
+
+  game = {
+    ...game,
+    currentPlayerIndex: 0,
+    currentColor: "red",
+    drawStack: 0,
+    players: game.players.map((player, index) =>
+      index === 0 ? { ...player, hand: [card, ...player.hand] } : player
+    ),
+  };
+
+  const before = {
+    currentPlayer: game.players[game.currentPlayerIndex].name,
+    currentColor: game.currentColor,
+    drawStack: game.drawStack,
+  };
+
+  game = playCard({
+    game,
+    playerId: "player-1",
+    cardId: card.id,
+    chosenColor: "green",
+  });
+
+  res.json({
+    message: "Prueba de wildDraw4 con chosenColor",
+    before,
+    after: {
+      currentPlayer: game.players[game.currentPlayerIndex].name,
+      currentColor: game.currentColor,
+      drawStack: game.drawStack,
+      topCard: game.discardPile[game.discardPile.length - 1],
+    },
   });
 });
 

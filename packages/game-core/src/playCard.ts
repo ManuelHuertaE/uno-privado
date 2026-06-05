@@ -92,6 +92,4 @@ export function playCard({
     game: updatedGame,
     card: cardToPlay,
   });
-
-  return nextTurn({ game: updatedGame });
 }

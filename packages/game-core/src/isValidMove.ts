@@ -7,9 +7,9 @@ interface IsValidMoveParams {
   drawStack: number;
 }
 
-function isDrawCard(card: Card): boolean {
-  return card.value === "draw2" || card.value === "wildDraw4";
-}
+// function isDrawCard(card: Card): boolean {
+//   return card.value === "draw2" || card.value === "wildDraw4";
+// }
 
 export function isValidMove({
   card,
@@ -20,7 +20,10 @@ export function isValidMove({
   // Si hay acumulación de robo activa,
   // solo se puede responder con otra carta de robo.
   if (drawStack > 0) {
-    return isDrawCard(card);
+    return (
+      card.value === "wildDraw4" ||
+      (card.value === "draw2" && card.color === currentColor)
+    );
   }
 
   // Los comodines siempre se pueden jugar.
