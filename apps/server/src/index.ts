@@ -1,5 +1,5 @@
 import express from "express";
-import { createGame, playCard } from "@uno/game-core";
+import { createGame, drawCards, playCard } from "@uno/game-core";
 
 const app = express();
 
@@ -11,62 +11,74 @@ app.get("/", (_req, res) => {
     ],
   });
 
-  const currentPlayer = game.players[game.currentPlayerIndex];
-  const topCard = game.discardPile.at(-1);
+  const player1 = game.players[0];
+  const player2 = game.players[1];
 
-  if (!topCard) {
-    throw new Error("No hay carta inicial.");
-  }
+  const draw2Card = player1.hand.find((card) => card.value === "draw2");
 
-  const playableCard = currentPlayer.hand.find(
-    (card) =>
-      card.color === game.currentColor ||
-      card.value === topCard.value ||
-      card.color === "wild"
-  );
-
-  if (!playableCard) {
+  if (!draw2Card) {
     res.json({
-      message: "El jugador no tiene cartas válidas para tirar.",
-      currentColor: game.currentColor,
-      topCard,
-      hand: currentPlayer.hand,
+      message:
+        "Jugador 1 no tiene una carta +2. Refresca la página para generar otra partida.",
+      player1Hand: player1.hand,
     });
 
     return;
   }
 
-  const before = {
-    player: currentPlayer.name,
-    cards: currentPlayer.hand.length,
-    currentColor: game.currentColor,
-    topCard,
-    cardToPlay: playableCard,
+  game = {
+    ...game,
+    currentColor: draw2Card.color,
+  };
+
+  const beforePlayCard = {
+    currentPlayerIndex: game.currentPlayerIndex,
+    currentPlayer: game.players[game.currentPlayerIndex].name,
+    player1Cards: game.players[0].hand.length,
+    player2Cards: game.players[1].hand.length,
+    drawPile: game.drawPile.length,
+    drawStack: game.drawStack,
+    cardToPlay: draw2Card,
   };
 
   game = playCard({
     game,
-    playerId: currentPlayer.id,
-    cardId: playableCard.id,
-    chosenColor: playableCard.color === "wild" ? "red" : undefined,
+    playerId: player1.id,
+    cardId: draw2Card.id,
   });
 
-  const afterCurrentPlayer = game.players.find(
-    (player) => player.id === currentPlayer.id
-  );
+  const afterPlayCard = {
+    currentPlayerIndex: game.currentPlayerIndex,
+    currentPlayer: game.players[game.currentPlayerIndex].name,
+    player1Cards: game.players[0].hand.length,
+    player2Cards: game.players[1].hand.length,
+    drawPile: game.drawPile.length,
+    drawStack: game.drawStack,
+    topCard: game.discardPile.at(-1),
+  };
+
+  game = drawCards({
+    game,
+    playerId: player2.id,
+    amount: game.drawStack,
+    clearDrawStack: true,
+    advanceTurn: true,
+  });
+
+  const afterDrawCards = {
+    currentPlayerIndex: game.currentPlayerIndex,
+    currentPlayer: game.players[game.currentPlayerIndex].name,
+    player1Cards: game.players[0].hand.length,
+    player2Cards: game.players[1].hand.length,
+    drawPile: game.drawPile.length,
+    drawStack: game.drawStack,
+  };
 
   res.json({
-    message: "Prueba de playCard",
-    before,
-    after: {
-      playerCards: afterCurrentPlayer?.hand.length,
-      discardPile: game.discardPile.length,
-      topCard: game.discardPile.at(-1),
-      currentColor: game.currentColor,
-      currentPlayerIndex: game.currentPlayerIndex,
-      currentPlayer: game.players[game.currentPlayerIndex]?.name,
-      status: game.status,
-    },
+    message: "Prueba completa: jugador 1 tira +2 y jugador 2 roba",
+    beforePlayCard,
+    afterPlayCard,
+    afterDrawCards,
   });
 });
 

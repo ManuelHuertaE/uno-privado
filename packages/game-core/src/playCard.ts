@@ -1,6 +1,7 @@
 import type { CardColor, GameState } from "@uno/shared";
 import { isValidMove } from "./isValidMove";
 import { nextTurn } from "./nextTurn";
+import { applyCardEffect } from "./applyCardEffect";
 
 interface PlayCardParams {
   game: GameState;
@@ -86,6 +87,11 @@ export function playCard({
   if (updatedGame.status === "finished") {
     return updatedGame;
   }
+
+  return applyCardEffect({
+    game: updatedGame,
+    card: cardToPlay,
+  });
 
   return nextTurn({ game: updatedGame });
 }
