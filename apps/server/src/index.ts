@@ -1,7 +1,21 @@
+import { createServer } from "node:http";
+import cors from "cors";
 import express from "express";
+import { Server } from "socket.io";
 import { createGame, getPlayerView, playCard } from "@uno/game-core";
+import { registerGameSocket } from "./socket/registerGameSocket";
 
 const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*",
+  },
+});
+
+app.use(cors());
+
+registerGameSocket(io);
 
 function createTestGame() {
   return createGame({
@@ -216,6 +230,6 @@ app.get("/test-game-state", (_req, res) => {
   });
 });
 
-app.listen(3000, () => {
+httpServer.listen(3000, () => {
   console.log("Servidor iniciado en puerto 3000");
 });
