@@ -4,6 +4,7 @@ export * from "./createGame";
 export * from "./isValidMove";
 export * from "./nextTurn";
 export * from "./drawCards";
+export * from "./drawForTurn";
 export * from "./playCard";
 export * from "./applyCardEffect";
 export * from "./resolveDrawStack";

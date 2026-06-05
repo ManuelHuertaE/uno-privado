@@ -21,6 +21,8 @@ export function getPlayerView({
     throw new Error("No hay jugador actual.");
   }
 
+  const isCurrentPlayer = currentPlayer.id === playerId;
+
   return {
     id: game.id,
     players: game.players.map((player, index) => ({
@@ -37,6 +39,9 @@ export function getPlayerView({
     currentColor: game.currentColor,
     direction: game.direction,
     drawStack: game.drawStack,
+    canDraw:
+      isCurrentPlayer && game.drawStack === 0 && game.status === "playing",
+    canResolveDrawStack: isCurrentPlayer && game.drawStack > 0,
     status: game.status,
   };
 }

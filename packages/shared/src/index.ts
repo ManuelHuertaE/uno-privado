@@ -60,5 +60,7 @@ export interface PlayerGameView {
   currentColor: CardColor;
   direction: 1 | -1;
   drawStack: number;
+  canDraw: boolean;
+  canResolveDrawStack: boolean;
   status: "waiting" | "playing" | "finished";
 }
