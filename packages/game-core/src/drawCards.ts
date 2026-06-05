@@ -1,20 +1,12 @@
 import type { GameState } from "@uno/shared";
 import { nextTurn } from "./nextTurn";
+import { refillDrawPile } from "./refillDrawPile";
 
 interface DrawCardsParams {
   game: GameState;
   playerId: string;
   amount?: number;
-
-  /**
-   * Si es true, significa que el jugador está pagando
-   * una acumulación de +2 / +4.
-   */
   clearDrawStack?: boolean;
-
-  /**
-   * Si es true, después de robar cartas pasa el turno.
-   */
   advanceTurn?: boolean;
 }
 
@@ -37,14 +29,20 @@ export function drawCards({
     throw new Error("El jugador no existe en la partida.");
   }
 
-  if (game.drawPile.length < amount) {
-    throw new Error("No hay suficientes cartas en el mazo para robar.");
+  let workingGame = game;
+
+  if (workingGame.drawPile.length < amount) {
+    workingGame = refillDrawPile(workingGame);
   }
 
-  const drawnCards = game.drawPile.slice(0, amount);
-  const newDrawPile = game.drawPile.slice(amount);
+  if (workingGame.drawPile.length < amount) {
+    throw new Error("No hay suficientes cartas disponibles para robar.");
+  }
 
-  const newPlayers = game.players.map((player, index) => {
+  const drawnCards = workingGame.drawPile.slice(0, amount);
+  const newDrawPile = workingGame.drawPile.slice(amount);
+
+  const newPlayers = workingGame.players.map((player, index) => {
     if (index !== playerIndex) {
       return player;
     }
@@ -56,10 +54,10 @@ export function drawCards({
   });
 
   const updatedGame: GameState = {
-    ...game,
+    ...workingGame,
     players: newPlayers,
     drawPile: newDrawPile,
-    drawStack: clearDrawStack ? 0 : game.drawStack,
+    drawStack: clearDrawStack ? 0 : workingGame.drawStack,
   };
 
   if (advanceTurn) {

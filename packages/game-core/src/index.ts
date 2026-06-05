@@ -7,3 +7,4 @@ export * from "./drawCards";
 export * from "./playCard";
 export * from "./applyCardEffect";
 export * from "./resolveDrawStack";
+export * from "./refillDrawPile";
