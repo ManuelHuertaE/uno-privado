@@ -1,6 +1,31 @@
+import type { Card } from "@uno/shared";
 import { describe, expect, it } from "vitest";
 import { createGame } from "../createGame";
 import { playCard } from "../playCard";
+
+const topCard: Card = {
+  id: "test-top-red-0",
+  color: "red",
+  value: "0",
+};
+
+const playableCard: Card = {
+  id: "test-red-5",
+  color: "red",
+  value: "5",
+};
+
+const remainingCard: Card = {
+  id: "test-blue-7",
+  color: "blue",
+  value: "7",
+};
+
+const extraCard: Card = {
+  id: "test-green-9",
+  color: "green",
+  value: "9",
+};
 
 describe("playCard", () => {
   it("should play a valid card and advance turn", () => {
@@ -214,5 +239,120 @@ describe("playCard", () => {
     expect(game.currentColor).toBe("blue");
     expect(game.drawStack).toBe(4);
     expect(game.currentPlayerIndex).toBe(1);
+  });
+
+  it("should mark as penalizable when a player has one card without declaring UNO", () => {
+    const game = {
+      ...createGame({
+        players: [
+          { id: "player-1", name: "A" },
+          { id: "player-2", name: "B" },
+        ],
+      }),
+      players: [
+        { id: "player-1", name: "A", hand: [playableCard, remainingCard] },
+        { id: "player-2", name: "B", hand: [] },
+      ],
+      discardPile: [topCard],
+      currentColor: "red" as const,
+    };
+
+    const updatedGame = playCard({
+      game,
+      playerId: "player-1",
+      cardId: playableCard.id,
+    });
+
+    expect(updatedGame.unoPenaltyPlayerIds).toEqual(["player-1"]);
+    expect(updatedGame.unoDeclaredPlayerIds).toEqual([]);
+  });
+
+  it("should not mark as penalizable if the player already declared UNO", () => {
+    const game = {
+      ...createGame({
+        players: [
+          { id: "player-1", name: "A" },
+          { id: "player-2", name: "B" },
+        ],
+      }),
+      players: [
+        { id: "player-1", name: "A", hand: [playableCard, remainingCard] },
+        { id: "player-2", name: "B", hand: [] },
+      ],
+      discardPile: [topCard],
+      currentColor: "red" as const,
+      unoDeclaredPlayerIds: ["player-1"],
+    };
+
+    const updatedGame = playCard({
+      game,
+      playerId: "player-1",
+      cardId: playableCard.id,
+    });
+
+    expect(updatedGame.unoPenaltyPlayerIds).toEqual([]);
+    expect(updatedGame.unoDeclaredPlayerIds).toEqual(["player-1"]);
+  });
+
+  it("should clear UNO state if the player has more than one card after playing", () => {
+    const game = {
+      ...createGame({
+        players: [
+          { id: "player-1", name: "A" },
+          { id: "player-2", name: "B" },
+        ],
+      }),
+      players: [
+        {
+          id: "player-1",
+          name: "A",
+          hand: [playableCard, remainingCard, extraCard],
+        },
+        { id: "player-2", name: "B", hand: [] },
+      ],
+      discardPile: [topCard],
+      currentColor: "red" as const,
+      unoDeclaredPlayerIds: ["player-1"],
+      unoPenaltyPlayerIds: ["player-1"],
+    };
+
+    const updatedGame = playCard({
+      game,
+      playerId: "player-1",
+      cardId: playableCard.id,
+    });
+
+    expect(updatedGame.unoPenaltyPlayerIds).toEqual([]);
+    expect(updatedGame.unoDeclaredPlayerIds).toEqual([]);
+  });
+
+  it("should finish the game if the player has no cards after playing", () => {
+    const game = {
+      ...createGame({
+        players: [
+          { id: "player-1", name: "A" },
+          { id: "player-2", name: "B" },
+        ],
+      }),
+      players: [
+        { id: "player-1", name: "A", hand: [playableCard] },
+        { id: "player-2", name: "B", hand: [] },
+      ],
+      discardPile: [topCard],
+      currentColor: "red" as const,
+      unoDeclaredPlayerIds: ["player-1"],
+      unoPenaltyPlayerIds: ["player-1"],
+    };
+
+    const updatedGame = playCard({
+      game,
+      playerId: "player-1",
+      cardId: playableCard.id,
+    });
+
+    expect(updatedGame.status).toBe("finished");
+    expect(updatedGame.currentPlayerIndex).toBe(0);
+    expect(updatedGame.unoPenaltyPlayerIds).toEqual([]);
+    expect(updatedGame.unoDeclaredPlayerIds).toEqual([]);
   });
 });

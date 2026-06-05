@@ -6,6 +6,8 @@ export * from "./nextTurn";
 export * from "./drawCards";
 export * from "./drawForTurn";
 export * from "./playCard";
+export * from "./sayUno";
+export * from "./challengeUno";
 export * from "./applyCardEffect";
 export * from "./resolveDrawStack";
 export * from "./refillDrawPile";

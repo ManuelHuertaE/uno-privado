@@ -45,5 +45,7 @@ export function createGame(params: CreateGameParams): GameState {
     currentColor: firstDiscard.color,
     status: "playing",
     drawStack: 0,
+    unoDeclaredPlayerIds: [],
+    unoPenaltyPlayerIds: [],
   };
 }

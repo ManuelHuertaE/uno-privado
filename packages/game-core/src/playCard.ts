@@ -1,6 +1,5 @@
 import type { CardColor, GameState } from "@uno/shared";
 import { isValidMove } from "./isValidMove";
-import { nextTurn } from "./nextTurn";
 import { applyCardEffect } from "./applyCardEffect";
 
 interface PlayCardParams {
@@ -12,6 +11,37 @@ interface PlayCardParams {
 
 function isWildCardValue(value: string): boolean {
   return value === "wild" || value === "wildDraw4";
+}
+
+function updateUnoStateAfterPlay(game: GameState, playerId: string): GameState {
+  const player = game.players.find((player) => player.id === playerId);
+
+  if (!player) {
+    throw new Error("No se encontro al jugador despues de jugar.");
+  }
+
+  const declaredUno = game.unoDeclaredPlayerIds.includes(playerId);
+  const unoDeclaredPlayerIds =
+    player.hand.length === 1 && declaredUno
+      ? game.unoDeclaredPlayerIds
+      : game.unoDeclaredPlayerIds.filter(
+          (declaredPlayerId) => declaredPlayerId !== playerId
+        );
+
+  const shouldBePenalized = player.hand.length === 1 && !declaredUno;
+  const unoPenaltyPlayerIds = shouldBePenalized
+    ? game.unoPenaltyPlayerIds.includes(playerId)
+      ? game.unoPenaltyPlayerIds
+      : [...game.unoPenaltyPlayerIds, playerId]
+    : game.unoPenaltyPlayerIds.filter(
+        (penaltyPlayerId) => penaltyPlayerId !== playerId
+      );
+
+  return {
+    ...game,
+    unoDeclaredPlayerIds,
+    unoPenaltyPlayerIds,
+  };
 }
 
 export function playCard({
@@ -74,15 +104,18 @@ export function playCard({
     throw new Error("No se encontró al jugador después de jugar.");
   }
 
-  const updatedGame: GameState = {
-    ...game,
-    players: newPlayers,
-    discardPile: [...game.discardPile, cardToPlay],
-    currentColor: isWildCardValue(cardToPlay.value)
-      ? chosenColor!
-      : cardToPlay.color,
-    status: playerAfterMove.hand.length === 0 ? "finished" : game.status,
-  };
+  const updatedGame = updateUnoStateAfterPlay(
+    {
+      ...game,
+      players: newPlayers,
+      discardPile: [...game.discardPile, cardToPlay],
+      currentColor: isWildCardValue(cardToPlay.value)
+        ? chosenColor!
+        : cardToPlay.color,
+      status: playerAfterMove.hand.length === 0 ? "finished" : game.status,
+    },
+    playerId
+  );
 
   if (updatedGame.status === "finished") {
     return updatedGame;

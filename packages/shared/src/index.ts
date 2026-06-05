@@ -40,6 +40,8 @@ export interface GameState {
   status: "waiting" | "playing" | "finished";
 
   drawStack: number;
+  unoDeclaredPlayerIds: string[];
+  unoPenaltyPlayerIds: string[];
 }
 
 export interface PublicPlayer {
@@ -47,6 +49,7 @@ export interface PublicPlayer {
   name: string;
   cardCount: number;
   isCurrentTurn: boolean;
+  isUnoPenaltyRisk: boolean;
 }
 
 export interface PlayerGameView {
@@ -62,5 +65,6 @@ export interface PlayerGameView {
   drawStack: number;
   canDraw: boolean;
   canResolveDrawStack: boolean;
+  hasDeclaredUno: boolean;
   status: "waiting" | "playing" | "finished";
 }

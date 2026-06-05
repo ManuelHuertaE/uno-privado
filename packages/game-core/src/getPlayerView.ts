@@ -30,6 +30,7 @@ export function getPlayerView({
       name: player.name,
       cardCount: player.hand.length,
       isCurrentTurn: index === game.currentPlayerIndex,
+      isUnoPenaltyRisk: game.unoPenaltyPlayerIds.includes(player.id),
     })),
     myHand: player.hand,
     drawPileCount: game.drawPile.length,
@@ -42,6 +43,7 @@ export function getPlayerView({
     canDraw:
       isCurrentPlayer && game.drawStack === 0 && game.status === "playing",
     canResolveDrawStack: isCurrentPlayer && game.drawStack > 0,
+    hasDeclaredUno: game.unoDeclaredPlayerIds.includes(playerId),
     status: game.status,
   };
 }

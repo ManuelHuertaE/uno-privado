@@ -45,4 +45,39 @@ describe("getPlayerView", () => {
     expect(otherPlayerView.canDraw).toBe(false);
     expect(otherPlayerView.canResolveDrawStack).toBe(false);
   });
+
+  it("should expose UNO penalty risk and the current player's UNO declaration", () => {
+    const game = {
+      ...createGame({
+        players: [
+          { id: "player-1", name: "A" },
+          { id: "player-2", name: "B" },
+        ],
+      }),
+      unoDeclaredPlayerIds: ["player-1"],
+      unoPenaltyPlayerIds: ["player-2"],
+    };
+
+    const playerOneView = getPlayerView({
+      game,
+      playerId: "player-1",
+    });
+    const playerTwoView = getPlayerView({
+      game,
+      playerId: "player-2",
+    });
+
+    expect(playerOneView.hasDeclaredUno).toBe(true);
+    expect(playerTwoView.hasDeclaredUno).toBe(false);
+    expect(playerOneView.players).toEqual([
+      expect.objectContaining({
+        id: "player-1",
+        isUnoPenaltyRisk: false,
+      }),
+      expect.objectContaining({
+        id: "player-2",
+        isUnoPenaltyRisk: true,
+      }),
+    ]);
+  });
 });
