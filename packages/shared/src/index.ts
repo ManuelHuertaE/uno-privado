@@ -41,3 +41,24 @@ export interface GameState {
 
   drawStack: number;
 }
+
+export interface PublicPlayer {
+  id: string;
+  name: string;
+  cardCount: number;
+  isCurrentTurn: boolean;
+}
+
+export interface PlayerGameView {
+  id: string;
+  players: PublicPlayer[];
+  myHand: Card[];
+  drawPileCount: number;
+  discardPile: Card[];
+  topCard: Card | undefined;
+  currentPlayerId: string;
+  currentColor: CardColor;
+  direction: 1 | -1;
+  drawStack: number;
+  status: "waiting" | "playing" | "finished";
+}

@@ -1,5 +1,5 @@
 import express from "express";
-import { createGame, playCard } from "@uno/game-core";
+import { createGame, getPlayerView, playCard } from "@uno/game-core";
 
 const app = express();
 
@@ -175,6 +175,44 @@ app.get("/test-wild-draw4", (_req, res) => {
       drawStack: game.drawStack,
       topCard: game.discardPile[game.discardPile.length - 1],
     },
+  });
+});
+
+app.get("/test-player-view", (_req, res) => {
+  const game = createTestGame();
+
+  const player1View = getPlayerView({
+    game,
+    playerId: "player-1",
+  });
+
+  const player2View = getPlayerView({
+    game,
+    playerId: "player-2",
+  });
+
+  res.json({
+    player1View,
+    player2View,
+  });
+});
+
+app.get("/test-game-state", (_req, res) => {
+  const game = createTestGame();
+
+  res.json({
+    currentPlayer:
+      game.players[game.currentPlayerIndex].name,
+    currentColor: game.currentColor,
+    drawStack: game.drawStack,
+    direction: game.direction,
+    drawPile: game.drawPile.length,
+    discardPile: game.discardPile.length,
+    players: game.players.map((player) => ({
+      id: player.id,
+      name: player.name,
+      cards: player.hand.length,
+    })),
   });
 });
 

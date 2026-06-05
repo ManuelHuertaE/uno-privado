@@ -8,3 +8,4 @@ export * from "./playCard";
 export * from "./applyCardEffect";
 export * from "./resolveDrawStack";
 export * from "./refillDrawPile";
+export * from "./getPlayerView";
