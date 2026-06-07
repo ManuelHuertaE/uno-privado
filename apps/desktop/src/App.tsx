@@ -139,18 +139,6 @@ function App() {
             </button>
           )}
 
-          {currentPlayer?.hand?.length === 2 && (
-            <button
-              onClick={() => {
-                socket.emit("game:sayUno", {
-                  roomId,
-                });
-              }}
-            >
-              Decir UNO
-            </button>
-          )}
-
           <h3>Jugadores</h3>
 
           {game.players.map((player: any) => (
