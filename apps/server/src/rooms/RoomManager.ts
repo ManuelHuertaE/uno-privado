@@ -208,6 +208,53 @@ drawForTurn(roomId: string, playerId: string): Room {
   return updatedRoom;
 }
 
+resolveDrawStack(roomId: string, playerId: string): Room {
+  const room = this.rooms.get(roomId);
+
+  if (!room) {
+    throw new Error("La sala no existe.");
+  }
+
+  if (!room.started || !room.game) {
+    throw new Error("La partida no ha iniciado.");
+  }
+
+  if (room.game.status !== "playing") {
+    throw new Error("La partida no está en curso.");
+  }
+
+  const currentPlayer = room.game.players[room.game.currentPlayerIndex];
+
+  if (!currentPlayer) {
+    throw new Error("No hay jugador actual.");
+  }
+
+  if (currentPlayer.id !== playerId) {
+    throw new Error("No es el turno de este jugador.");
+  }
+
+  if (room.game.drawStack <= 0) {
+    throw new Error("No hay acumulación de robo activa.");
+  }
+
+  const updatedGame = drawCards({
+    game: room.game,
+    playerId,
+    amount: room.game.drawStack,
+    clearDrawStack: true,
+    advanceTurn: true,
+  });
+
+  const updatedRoom: Room = {
+    ...room,
+    game: updatedGame,
+  };
+
+  this.rooms.set(room.id, updatedRoom);
+
+  return updatedRoom;
+}
+
 playCard(
   roomId: string,
   playerId: string,

@@ -105,6 +105,17 @@ function App() {
             Carta superior: {topCard?.color} {topCard?.value}
           </p>
 
+        {game.drawStack > 0 ? (
+          <button
+            onClick={() => {
+              socket.emit("game:resolveDrawStack", {
+                roomId,
+              });
+            }}
+          >
+            Robar acumulación ({game.drawStack})
+          </button>
+        ) : (
           <button
             onClick={() => {
               socket.emit("game:drawForTurn", {
@@ -114,6 +125,7 @@ function App() {
           >
             Robar carta
           </button>
+        )}
 
           <h3>Cartas del jugador actual</h3>
 

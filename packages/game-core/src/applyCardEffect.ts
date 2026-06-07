@@ -20,13 +20,20 @@ export function applyCardEffect({
 
     case "reverse": {
       const reversedGame: GameState = {
-        ...game,
-        direction: game.direction === 1 ? -1 : 1,
-      };
+      ...game,
+      direction: game.direction === 1 ? -1 : 1,
+    };
 
-      return nextTurn({
-        game: reversedGame,
-      });
+  if (game.players.length === 2) {
+    return nextTurn({
+      game: reversedGame,
+      steps: 2,
+    });
+  }
+
+  return nextTurn({
+    game: reversedGame,
+  });
     }
 
     case "draw2": {
