@@ -287,6 +287,124 @@ playCard(
 
   return updatedRoom;
 }
+
+sayUno(roomId: string, playerId: string): Room {
+  const room = this.rooms.get(roomId);
+
+  if (!room) {
+    throw new Error("La sala no existe.");
+  }
+
+  if (!room.started || !room.game) {
+    throw new Error("La partida no ha iniciado.");
+  }
+
+  if (room.game.status !== "playing") {
+    throw new Error("La partida no está en curso.");
+  }
+
+  const player = room.game.players.find((player) => player.id === playerId);
+
+  if (!player) {
+    throw new Error("El jugador no existe en la partida.");
+  }
+
+  if (player.hand.length !== 2) {
+    throw new Error("Solo puedes decir UNO cuando tienes exactamente 2 cartas.");
+  }
+
+  const unoDeclaredPlayerIds = room.game.unoDeclaredPlayerIds.includes(playerId)
+    ? room.game.unoDeclaredPlayerIds
+    : [...room.game.unoDeclaredPlayerIds, playerId];
+
+  const updatedRoom: Room = {
+    ...room,
+    game: {
+      ...room.game,
+      unoDeclaredPlayerIds,
+      unoPenaltyPlayerIds: room.game.unoPenaltyPlayerIds.filter(
+        (penaltyPlayerId) => penaltyPlayerId !== playerId
+      ),
+    },
+  };
+
+  this.rooms.set(room.id, updatedRoom);
+
+  return updatedRoom;
+}
+
+challengeUno(
+  roomId: string,
+  challengerId: string,
+  targetPlayerId: string
+): Room {
+  const room = this.rooms.get(roomId);
+
+  if (!room) {
+    throw new Error("La sala no existe.");
+  }
+
+  if (!room.started || !room.game) {
+    throw new Error("La partida no ha iniciado.");
+  }
+
+  if (room.game.status !== "playing") {
+    throw new Error("La partida no está en curso.");
+  }
+
+  const challenger = room.game.players.find(
+    (player) => player.id === challengerId
+  );
+
+  if (!challenger) {
+    throw new Error("El jugador que reta no existe en la partida.");
+  }
+
+  const targetPlayer = room.game.players.find(
+    (player) => player.id === targetPlayerId
+  );
+
+  if (!targetPlayer) {
+    throw new Error("El jugador retado no existe en la partida.");
+  }
+
+  if (challengerId === targetPlayerId) {
+    throw new Error("No puedes retarte a ti mismo.");
+  }
+
+  if (targetPlayer.hand.length !== 1) {
+    throw new Error("Solo puedes retar a un jugador que tenga una carta.");
+  }
+
+  if (!room.game.unoPenaltyPlayerIds.includes(targetPlayerId)) {
+    throw new Error("Ese jugador no puede ser penalizado por UNO.");
+  }
+
+  const gameAfterPenalty = drawCards({
+    game: room.game,
+    playerId: targetPlayerId,
+    amount: 2,
+    clearDrawStack: false,
+    advanceTurn: false,
+  });
+
+  const updatedRoom: Room = {
+    ...room,
+    game: {
+      ...gameAfterPenalty,
+      unoDeclaredPlayerIds: gameAfterPenalty.unoDeclaredPlayerIds.filter(
+        (declaredPlayerId) => declaredPlayerId !== targetPlayerId
+      ),
+      unoPenaltyPlayerIds: gameAfterPenalty.unoPenaltyPlayerIds.filter(
+        (penaltyPlayerId) => penaltyPlayerId !== targetPlayerId
+      ),
+    },
+  };
+
+  this.rooms.set(room.id, updatedRoom);
+
+  return updatedRoom;
+}
 }
 
 

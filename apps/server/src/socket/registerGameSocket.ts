@@ -58,15 +58,13 @@ export function registerGameSocket(io: Server): void {
       try {
         const playerName = readRequiredString(
           readPayloadField(payload, "playerName"),
-          "playerName"
+          "playerName",
         );
 
         const room = roomManager.createRoom(playerName, socket.id);
         console.log(room);
 
-        console.log(
-          `[ROOM CREATE] ${playerName} creó la sala ${room.id}`
-        );
+        console.log(`[ROOM CREATE] ${playerName} creó la sala ${room.id}`);
 
         socket.join(room.id);
         socket.emit("room:created", room);
@@ -79,25 +77,19 @@ export function registerGameSocket(io: Server): void {
       try {
         const roomId = readRequiredString(
           readPayloadField(payload, "roomId"),
-          "roomId"
+          "roomId",
         );
 
         const playerName = readRequiredString(
           readPayloadField(payload, "playerName"),
-          "playerName"
+          "playerName",
         );
 
-        const room = roomManager.joinRoom(
-          roomId,
-          playerName,
-          socket.id
-        );
+        const room = roomManager.joinRoom(roomId, playerName, socket.id);
 
         console.log(room);
 
-        console.log(
-          `[ROOM JOIN] ${playerName} entró a la sala ${room.id}`
-        );
+        console.log(`[ROOM JOIN] ${playerName} entró a la sala ${room.id}`);
 
         socket.join(room.id);
         io.to(room.id).emit("room:updated", room);
@@ -110,7 +102,7 @@ export function registerGameSocket(io: Server): void {
       try {
         const roomId = readRequiredString(
           readPayloadField(payload, "roomId"),
-          "roomId"
+          "roomId",
         );
 
         const room = roomManager.getRoom(roomId);
@@ -120,7 +112,7 @@ export function registerGameSocket(io: Server): void {
         }
 
         const player = room.players.find(
-          (player) => player.socketId === socket.id
+          (player) => player.socketId === socket.id,
         );
 
         if (!player) {
@@ -129,11 +121,13 @@ export function registerGameSocket(io: Server): void {
 
         const updatedRoom = roomManager.startGame(roomId, player.id);
 
-        console.log(`[GAME START] Sala ${updatedRoom.id} iniciada por ${player.name}`);
+        console.log(
+          `[GAME START] Sala ${updatedRoom.id} iniciada por ${player.name}`,
+        );
 
         console.log("Game creado:", {
           id: updatedRoom.game?.id,
-          players: updatedRoom.game?.players.map((player:any) => ({
+          players: updatedRoom.game?.players.map((player: any) => ({
             id: player.id,
             name: player.name,
             cards: player.hand.length,
@@ -158,20 +152,18 @@ export function registerGameSocket(io: Server): void {
       try {
         const roomId = readRequiredString(
           readPayloadField(payload, "roomId"),
-          "roomId"
+          "roomId",
         );
 
         const cardId = readRequiredString(
           readPayloadField(payload, "cardId"),
-          "cardId"
+          "cardId",
         );
 
         const chosenColorValue = readPayloadField(payload, "chosenColor");
 
         const chosenColor =
-          typeof chosenColorValue === "string"
-            ? chosenColorValue
-            : undefined;
+          typeof chosenColorValue === "string" ? chosenColorValue : undefined;
 
         const room = roomManager.getRoom(roomId);
 
@@ -180,7 +172,7 @@ export function registerGameSocket(io: Server): void {
         }
 
         const player = room.players.find(
-          (player) => player.socketId === socket.id
+          (player) => player.socketId === socket.id,
         );
 
         if (!player) {
@@ -191,11 +183,11 @@ export function registerGameSocket(io: Server): void {
           roomId,
           player.id,
           cardId,
-          chosenColor as never
+          chosenColor as never,
         );
 
         console.log(
-          `[PLAY CARD] ${player.name} jugó ${cardId} en sala ${updatedRoom.id}`
+          `[PLAY CARD] ${player.name} jugó ${cardId} en sala ${updatedRoom.id}`,
         );
 
         io.to(updatedRoom.id).emit("room:updated", {
@@ -212,7 +204,7 @@ export function registerGameSocket(io: Server): void {
       try {
         const roomId = readRequiredString(
           readPayloadField(payload, "roomId"),
-          "roomId"
+          "roomId",
         );
 
         const room = roomManager.getRoom(roomId);
@@ -222,7 +214,7 @@ export function registerGameSocket(io: Server): void {
         }
 
         const player = room.players.find(
-          (player) => player.socketId === socket.id
+          (player) => player.socketId === socket.id,
         );
 
         if (!player) {
@@ -232,7 +224,7 @@ export function registerGameSocket(io: Server): void {
         const updatedRoom = roomManager.drawForTurn(roomId, player.id);
 
         console.log(
-          `[DRAW FOR TURN] ${player.name} robó una carta en sala ${updatedRoom.id}`
+          `[DRAW FOR TURN] ${player.name} robó una carta en sala ${updatedRoom.id}`,
         );
 
         io.to(updatedRoom.id).emit("room:updated", {
@@ -250,7 +242,7 @@ export function registerGameSocket(io: Server): void {
       try {
         const roomId = readRequiredString(
           readPayloadField(payload, "roomId"),
-          "roomId"
+          "roomId",
         );
 
         const room = roomManager.getRoom(roomId);
@@ -260,7 +252,7 @@ export function registerGameSocket(io: Server): void {
         }
 
         const player = room.players.find(
-          (player) => player.socketId === socket.id
+          (player) => player.socketId === socket.id,
         );
 
         if (!player) {
@@ -270,7 +262,7 @@ export function registerGameSocket(io: Server): void {
         const updatedRoom = roomManager.resolveDrawStack(roomId, player.id);
 
         console.log(
-          `[RESOLVE DRAW STACK] ${player.name} robó acumulación en sala ${updatedRoom.id}`
+          `[RESOLVE DRAW STACK] ${player.name} robó acumulación en sala ${updatedRoom.id}`,
         );
 
         io.to(updatedRoom.id).emit("room:updated", {
@@ -282,7 +274,92 @@ export function registerGameSocket(io: Server): void {
       } catch (error) {
         emitGameError(socket, error);
       }
-  });
+    });
+
+    socket.on("game:sayUno", (payload: unknown) => {
+      try {
+        const roomId = readRequiredString(
+          readPayloadField(payload, "roomId"),
+          "roomId",
+        );
+
+        const room = roomManager.getRoom(roomId);
+
+        if (!room) {
+          throw new Error("La sala no existe.");
+        }
+
+        const player = room.players.find(
+          (player) => player.socketId === socket.id,
+        );
+
+        if (!player) {
+          throw new Error("No perteneces a esta sala.");
+        }
+
+        const updatedRoom = roomManager.sayUno(roomId, player.id);
+
+        console.log(
+          `[SAY UNO] ${player.name} dijo UNO en sala ${updatedRoom.id}`,
+        );
+
+        io.to(updatedRoom.id).emit("room:updated", {
+          ...updatedRoom,
+          game: null,
+        });
+
+        emitPrivateGameState(io, updatedRoom.id);
+      } catch (error) {
+        emitGameError(socket, error);
+      }
+    });
+
+    socket.on("game:challengeUno", (payload: unknown) => {
+      try {
+        const roomId = readRequiredString(
+          readPayloadField(payload, "roomId"),
+          "roomId",
+        );
+
+        const targetPlayerId = readRequiredString(
+          readPayloadField(payload, "targetPlayerId"),
+          "targetPlayerId",
+        );
+
+        const room = roomManager.getRoom(roomId);
+
+        if (!room) {
+          throw new Error("La sala no existe.");
+        }
+
+        const challenger = room.players.find(
+          (player) => player.socketId === socket.id,
+        );
+
+        if (!challenger) {
+          throw new Error("No perteneces a esta sala.");
+        }
+
+        const updatedRoom = roomManager.challengeUno(
+          roomId,
+          challenger.id,
+          targetPlayerId,
+        );
+
+        console.log(
+          `[CHALLENGE UNO] ${challenger.name} retó a ${targetPlayerId} en sala ${updatedRoom.id}`,
+        );
+
+        io.to(updatedRoom.id).emit("room:updated", {
+          ...updatedRoom,
+          game: null,
+        });
+
+        emitPrivateGameState(io, updatedRoom.id);
+      } catch (error) {
+        emitGameError(socket, error);
+      }
+    });
 
     socket.on("disconnect", () => {
       console.log("Cliente desconectado:", socket.id);

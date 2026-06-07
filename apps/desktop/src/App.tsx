@@ -105,27 +105,75 @@ function App() {
             Carta superior: {topCard?.color} {topCard?.value}
           </p>
 
-        {game.drawStack > 0 ? (
-          <button
-            onClick={() => {
-              socket.emit("game:resolveDrawStack", {
-                roomId,
-              });
-            }}
-          >
-            Robar acumulación ({game.drawStack})
-          </button>
-        ) : (
-          <button
-            onClick={() => {
-              socket.emit("game:drawForTurn", {
-                roomId,
-              });
-            }}
-          >
-            Robar carta
-          </button>
-        )}
+          {game.drawStack > 0 ? (
+            <button
+              onClick={() => {
+                socket.emit("game:resolveDrawStack", {
+                  roomId,
+                });
+              }}
+            >
+              Robar acumulación ({game.drawStack})
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                socket.emit("game:drawForTurn", {
+                  roomId,
+                });
+              }}
+            >
+              Robar carta
+            </button>
+          )}
+
+          {currentPlayer?.hand?.length === 2 && (
+            <button
+              onClick={() => {
+                socket.emit("game:sayUno", {
+                  roomId,
+                });
+              }}
+            >
+              Decir UNO
+            </button>
+          )}
+
+          {currentPlayer?.hand?.length === 2 && (
+            <button
+              onClick={() => {
+                socket.emit("game:sayUno", {
+                  roomId,
+                });
+              }}
+            >
+              Decir UNO
+            </button>
+          )}
+
+          <h3>Jugadores</h3>
+
+          {game.players.map((player: any) => (
+            <div key={player.id}>
+              <span>
+                {player.name} - cartas:{" "}
+                {player.handCount ?? player.hand?.length}
+              </span>
+
+              {player.handCount === 1 && (
+                <button
+                  onClick={() => {
+                    socket.emit("game:challengeUno", {
+                      roomId,
+                      targetPlayerId: player.id,
+                    });
+                  }}
+                >
+                  Retar UNO
+                </button>
+              )}
+            </div>
+          ))}
 
           <h3>Cartas del jugador actual</h3>
 
