@@ -79,6 +79,51 @@ export function registerGameSocket(io: Server): void {
       }
     });
 
+    socket.on("game:start", (payload: unknown) => {
+      try {
+        const roomId = readRequiredString(
+          readPayloadField(payload, "roomId"),
+          "roomId"
+        );
+
+        const room = roomManager.getRoom(roomId);
+
+        if (!room) {
+          throw new Error("La sala no existe.");
+        }
+
+        const player = room.players.find(
+          (player) => player.socketId === socket.id
+        );
+
+        if (!player) {
+          throw new Error("No perteneces a esta sala.");
+        }
+
+        const updatedRoom = roomManager.startGame(roomId, player.id);
+
+        console.log(`[GAME START] Sala ${updatedRoom.id} iniciada por ${player.name}`);
+
+        console.log("Game creado:", {
+          id: updatedRoom.game?.id,
+          players: updatedRoom.game?.players.map((player:any) => ({
+            id: player.id,
+            name: player.name,
+            cards: player.hand.length,
+          })),
+          drawPile: updatedRoom.game?.drawPile.length,
+          discardPile: updatedRoom.game?.discardPile.length,
+          currentColor: updatedRoom.game?.currentColor,
+          currentPlayerIndex: updatedRoom.game?.currentPlayerIndex,
+        });
+
+        io.to(updatedRoom.id).emit("room:updated", updatedRoom);
+        io.to(updatedRoom.id).emit("game:updated", updatedRoom.game);
+      } catch (error) {
+        emitGameError(socket, error);
+      }
+    });
+
     socket.on("disconnect", () => {
       console.log("Cliente desconectado:", socket.id);
 

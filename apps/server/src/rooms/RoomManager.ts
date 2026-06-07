@@ -1,4 +1,5 @@
 // import { randomUUID } from "node:crypto";
+import { createGame } from '@uno/game-core'
 import type { Room, RoomPlayer } from "./types";
 
 function createShortId(): string {
@@ -47,6 +48,7 @@ export class RoomManager {
       hostId: host.id,
       players: [host],
       started: false,
+      game: null,
     };
 
     this.rooms.set(room.id, room);
@@ -118,6 +120,43 @@ export class RoomManager {
 
     return undefined;
   }
+
+  startGame(roomId: string, playerId: string): Room {
+  const room = this.rooms.get(roomId);
+
+  if (!room) {
+    throw new Error("La sala no existe.");
+  }
+
+  if (room.started) {
+    throw new Error("La partida ya inició.");
+  }
+
+  if (room.hostId !== playerId) {
+    throw new Error("Solo el host puede iniciar la partida.");
+  }
+
+  if (room.players.length < 2) {
+    throw new Error("Se necesitan al menos 2 jugadores para iniciar.");
+  }
+
+  const game = createGame({
+    players: room.players.map((player) => ({
+      id: player.id,
+      name: player.name,
+    })),
+  });
+
+  const updatedRoom: Room = {
+    ...room,
+    started: true,
+    game,
+  };
+
+  this.rooms.set(room.id, updatedRoom);
+
+  return updatedRoom;
+}
 }
 
 export const roomManager = new RoomManager();

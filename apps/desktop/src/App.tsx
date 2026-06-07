@@ -69,6 +69,16 @@ function App() {
       >
         Unirse a sala
       </button>
+
+      <button
+        onClick={() => {
+          socket.emit("game:start", {
+            roomId,
+          });
+        }}
+      >
+        Iniciar partida
+      </button>
     </>
   );
 }

@@ -1,3 +1,5 @@
+import type { GameState } from "@uno/shared";
+
 export type RoomPlayer = {
   id: string;
   name: string;
@@ -9,4 +11,5 @@ export type Room = {
   hostId: string;
   players: RoomPlayer[];
   started: boolean;
+  game: GameState | null;
 };

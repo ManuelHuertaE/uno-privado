@@ -9,6 +9,10 @@ interface CreateGameParams {
   }>;
 }
 
+function createGameId(): string {
+  return `game_${Math.random().toString(36).slice(2, 12)}`;
+}
+
 export function createGame(params: CreateGameParams): GameState {
   const deck = shuffleDeck(createDeck());
 
@@ -36,7 +40,7 @@ export function createGame(params: CreateGameParams): GameState {
   }
 
   return {
-    id: crypto.randomUUID(),
+    id: createGameId(),
     players,
     drawPile: deck,
     discardPile: [firstDiscard],
