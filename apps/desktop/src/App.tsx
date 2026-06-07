@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
 
@@ -6,6 +7,7 @@ const socket = io("http://localhost:3000");
 function App() {
   const [playerName, setPlayerName] = useState("");
   const [roomId, setRoomId] = useState("");
+  const [game, setGame] = useState<any>(null);
 
   useEffect(() => {
     socket.on("connect", () => {
@@ -21,17 +23,26 @@ function App() {
       console.log("Sala actualizada:", room);
     });
 
-    socket.on("game:error", (message) => {
-      console.error("Error:", message);
+    socket.on("game:updated", (updatedGame) => {
+      console.log("Game actualizado:", updatedGame);
+      setGame(updatedGame);
+    });
+
+    socket.on("game:error", (error) => {
+      console.error("Error:", error);
     });
 
     return () => {
       socket.off("connect");
       socket.off("room:created");
       socket.off("room:updated");
+      socket.off("game:updated");
       socket.off("game:error");
     };
   }, []);
+
+  const currentPlayer = game?.players?.[game.currentPlayerIndex];
+  const topCard = game?.discardPile?.[game.discardPile.length - 1];
 
   return (
     <>
@@ -79,6 +90,43 @@ function App() {
       >
         Iniciar partida
       </button>
+
+      {game && (
+        <div>
+          <h2>Partida</h2>
+
+          <p>Turno de: {currentPlayer?.name}</p>
+
+          <p>Color actual: {game.currentColor}</p>
+
+          <p>
+            Carta superior: {topCard?.color} {topCard?.value}
+          </p>
+
+          <h3>Cartas del jugador actual</h3>
+
+          {currentPlayer?.hand.map((card: any) => (
+            <button
+              key={card.id}
+              onClick={() => {
+                const chosenColor =
+                  card.color === "wild"
+                    ? prompt("Elige color: red, blue, green, yellow") ||
+                      undefined
+                    : undefined;
+
+                socket.emit("game:playCard", {
+                  roomId,
+                  cardId: card.id,
+                  chosenColor,
+                });
+              }}
+            >
+              {card.color} {card.value}
+            </button>
+          ))}
+        </div>
+      )}
     </>
   );
 }

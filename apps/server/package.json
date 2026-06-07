@@ -14,7 +14,8 @@
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "socket.io": "^4.8.3",
-    "@uno/game-core": "workspace:*"
+    "@uno/game-core": "workspace:*",
+    "@uno/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

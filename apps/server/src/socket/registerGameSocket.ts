@@ -13,8 +13,35 @@ function readPayloadField(payload: unknown, fieldName: string): unknown {
   if (!payload || typeof payload !== "object") {
     return undefined;
   }
-
   return (payload as Record<string, unknown>)[fieldName];
+}
+
+function emitPrivateGameState(io: Server, roomId: string): void {
+  const room = roomManager.getRoom(roomId);
+
+  if (!room?.game) {
+    return;
+  }
+
+  for (const roomPlayer of room.players) {
+    const socket = io.sockets.sockets.get(roomPlayer.socketId);
+
+    if (!socket) {
+      continue;
+    }
+
+    const privateGame = {
+      ...room.game,
+      players: room.game.players.map((gamePlayer) => ({
+        id: gamePlayer.id,
+        name: gamePlayer.name,
+        hand: gamePlayer.id === roomPlayer.id ? gamePlayer.hand : [],
+        handCount: gamePlayer.hand.length,
+      })),
+    };
+
+    socket.emit("game:updated", privateGame);
+  }
 }
 
 function emitGameError(socket: Socket, error: unknown): void {
@@ -117,8 +144,65 @@ export function registerGameSocket(io: Server): void {
           currentPlayerIndex: updatedRoom.game?.currentPlayerIndex,
         });
 
-        io.to(updatedRoom.id).emit("room:updated", updatedRoom);
-        io.to(updatedRoom.id).emit("game:updated", updatedRoom.game);
+        io.to(updatedRoom.id).emit("room:updated", {
+          ...updatedRoom,
+          game: null,
+        });
+        emitPrivateGameState(io, updatedRoom.id);
+      } catch (error) {
+        emitGameError(socket, error);
+      }
+    });
+
+    socket.on("game:playCard", (payload: unknown) => {
+      try {
+        const roomId = readRequiredString(
+          readPayloadField(payload, "roomId"),
+          "roomId"
+        );
+
+        const cardId = readRequiredString(
+          readPayloadField(payload, "cardId"),
+          "cardId"
+        );
+
+        const chosenColorValue = readPayloadField(payload, "chosenColor");
+
+        const chosenColor =
+          typeof chosenColorValue === "string"
+            ? chosenColorValue
+            : undefined;
+
+        const room = roomManager.getRoom(roomId);
+
+        if (!room) {
+          throw new Error("La sala no existe.");
+        }
+
+        const player = room.players.find(
+          (player) => player.socketId === socket.id
+        );
+
+        if (!player) {
+          throw new Error("No perteneces a esta sala.");
+        }
+
+        const updatedRoom = roomManager.playCard(
+          roomId,
+          player.id,
+          cardId,
+          chosenColor as never
+        );
+
+        console.log(
+          `[PLAY CARD] ${player.name} jugó ${cardId} en sala ${updatedRoom.id}`
+        );
+
+        io.to(updatedRoom.id).emit("room:updated", {
+          ...updatedRoom,
+          game: null,
+        });
+        emitPrivateGameState(io, updatedRoom.id);
       } catch (error) {
         emitGameError(socket, error);
       }
@@ -132,7 +216,10 @@ export function registerGameSocket(io: Server): void {
       console.log("Sala después de desconectar:", updatedRoom);
 
       if (updatedRoom) {
-        io.to(updatedRoom.id).emit("room:updated", updatedRoom);
+        io.to(updatedRoom.id).emit("room:updated", {
+          ...updatedRoom,
+          game: null,
+        });
       }
     });
   });

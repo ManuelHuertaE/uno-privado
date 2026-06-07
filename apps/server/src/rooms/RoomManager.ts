@@ -1,6 +1,7 @@
 // import { randomUUID } from "node:crypto";
-import { createGame } from '@uno/game-core'
+import { createGame, playCard } from '@uno/game-core'
 import type { Room, RoomPlayer } from "./types";
+import type { CardColor } from "@uno/shared";
 
 function createShortId(): string {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -157,6 +158,41 @@ export class RoomManager {
 
   return updatedRoom;
 }
+
+playCard(
+  roomId: string,
+  playerId: string,
+  cardId: string,
+  chosenColor?: Exclude<CardColor, "wild">
+): Room {
+  const room = this.rooms.get(roomId);
+
+  if (!room) {
+    throw new Error("La sala no existe.");
+  }
+
+  if (!room.started || !room.game) {
+    throw new Error("La partida no ha iniciado.");
+  }
+
+  const updatedGame = playCard({
+    game: room.game,
+    playerId,
+    cardId,
+    chosenColor,
+  });
+
+  const updatedRoom: Room = {
+    ...room,
+    game: updatedGame,
+  };
+
+  this.rooms.set(room.id, updatedRoom);
+
+  return updatedRoom;
 }
+}
+
+
 
 export const roomManager = new RoomManager();
