@@ -99,9 +99,21 @@ function App() {
 
           <p>Color actual: {game.currentColor}</p>
 
+          <p>Draw stack: {game.drawStack}</p>
+
           <p>
             Carta superior: {topCard?.color} {topCard?.value}
           </p>
+
+          <button
+            onClick={() => {
+              socket.emit("game:drawForTurn", {
+                roomId,
+              });
+            }}
+          >
+            Robar carta
+          </button>
 
           <h3>Cartas del jugador actual</h3>
 

@@ -1,5 +1,5 @@
 // import { randomUUID } from "node:crypto";
-import { createGame, playCard } from '@uno/game-core'
+import { createGame, drawCards, playCard as playCardCore } from '@uno/game-core'
 import type { Room, RoomPlayer } from "./types";
 import type { CardColor } from "@uno/shared";
 
@@ -159,6 +159,55 @@ export class RoomManager {
   return updatedRoom;
 }
 
+drawForTurn(roomId: string, playerId: string): Room {
+  const room = this.rooms.get(roomId);
+
+  if (!room) {
+    throw new Error("La sala no existe.");
+  }
+
+  if (!room.started || !room.game) {
+    throw new Error("La partida no ha iniciado.");
+  }
+
+  if (room.game.status !== "playing") {
+    throw new Error("La partida no está en curso.");
+  }
+
+  const currentPlayer = room.game.players[room.game.currentPlayerIndex];
+
+  if (!currentPlayer) {
+    throw new Error("No hay jugador actual.");
+  }
+
+  if (currentPlayer.id !== playerId) {
+    throw new Error("No es el turno de este jugador.");
+  }
+
+  if (room.game.drawStack > 0) {
+    throw new Error(
+      "Hay una acumulación de robo activa. Debes responder con una carta de robo o resolver la acumulación."
+    );
+  }
+
+  const updatedGame = drawCards({
+    game: room.game,
+    playerId,
+    amount: 1,
+    clearDrawStack: false,
+    advanceTurn: false,
+  });
+
+  const updatedRoom: Room = {
+    ...room,
+    game: updatedGame,
+  };
+
+  this.rooms.set(room.id, updatedRoom);
+
+  return updatedRoom;
+}
+
 playCard(
   roomId: string,
   playerId: string,
@@ -175,7 +224,7 @@ playCard(
     throw new Error("La partida no ha iniciado.");
   }
 
-  const updatedGame = playCard({
+  const updatedGame = playCardCore({
     game: room.game,
     playerId,
     cardId,

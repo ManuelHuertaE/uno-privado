@@ -208,6 +208,44 @@ export function registerGameSocket(io: Server): void {
       }
     });
 
+    socket.on("game:drawForTurn", (payload: unknown) => {
+      try {
+        const roomId = readRequiredString(
+          readPayloadField(payload, "roomId"),
+          "roomId"
+        );
+
+        const room = roomManager.getRoom(roomId);
+
+        if (!room) {
+          throw new Error("La sala no existe.");
+        }
+
+        const player = room.players.find(
+          (player) => player.socketId === socket.id
+        );
+
+        if (!player) {
+          throw new Error("No perteneces a esta sala.");
+        }
+
+        const updatedRoom = roomManager.drawForTurn(roomId, player.id);
+
+        console.log(
+          `[DRAW FOR TURN] ${player.name} robó una carta en sala ${updatedRoom.id}`
+        );
+
+        io.to(updatedRoom.id).emit("room:updated", {
+          ...updatedRoom,
+          game: null,
+        });
+
+        emitPrivateGameState(io, updatedRoom.id);
+      } catch (error) {
+        emitGameError(socket, error);
+      }
+    });
+
     socket.on("disconnect", () => {
       console.log("Cliente desconectado:", socket.id);
 
