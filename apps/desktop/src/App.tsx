@@ -1,227 +1,218 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { io } from "socket.io-client";
+import "./App.css";
+
+type RoomPlayer = {
+  id: string;
+  name: string;
+  socketId?: string;
+};
+
+type Room = {
+  id: string;
+  hostId: string;
+  players: RoomPlayer[];
+};
+
+type ServerError = {
+  message?: string;
+};
 
 const socket = io("http://localhost:3000");
 
 function App() {
   const [playerName, setPlayerName] = useState("");
   const [roomId, setRoomId] = useState("");
-  const [game, setGame] = useState<any>(null);
-  const [room, setRoom] = useState<any>(null);
+  const [message, setMessage] = useState("");
+  const [room, setRoom] = useState<Room | null>(null);
+
+  const trimmedPlayerName = playerName.trim();
+  const trimmedRoomId = roomId.trim();
+  const canCreateRoom = trimmedPlayerName.length > 0;
+  const canJoinRoom = canCreateRoom && trimmedRoomId.length > 0;
+  const currentPlayer = room?.players.find(
+    (player) => player.socketId === socket.id,
+  );
+  const isHost = Boolean(currentPlayer && currentPlayer.id === room?.hostId);
 
   useEffect(() => {
-    socket.on("connect", () => {
-      console.log("Conectado:", socket.id);
-    });
+    const handleRoomCreated = (createdRoom: Room) => {
+      setRoom(createdRoom);
+      setRoomId(createdRoom.id);
+      setMessage("");
+    };
 
-    socket.on("room:created", (room) => {
-      console.log("Sala creada:", room);
-      setRoom(room);
-      setRoomId(room.id);
-    });
+    const handleRoomJoined = (joinedRoom: Room) => {
+      setRoom(joinedRoom);
+      setRoomId(joinedRoom.id);
+      setMessage("");
+    };
 
-    socket.on("room:updated", (updatedRoom) => {
-      console.log("Sala actualizada:", updatedRoom);
+    const handleRoomUpdated = (updatedRoom: Room) => {
       setRoom(updatedRoom);
-    });
+      setRoomId(updatedRoom.id);
+      setMessage("");
+    };
 
-    socket.on("game:updated", (updatedGame) => {
-      console.log("Game actualizado:", updatedGame);
-      setGame(updatedGame);
-    });
+    const handleGameError = (error: ServerError | string) => {
+      setMessage(
+        typeof error === "string"
+          ? error
+          : error.message || "Ocurrio un error en el servidor.",
+      );
+    };
 
-    socket.on("game:error", (error) => {
-      console.error("Error:", error);
-    });
+    socket.on("room:created", handleRoomCreated);
+    socket.on("room:joined", handleRoomJoined);
+    socket.on("room:updated", handleRoomUpdated);
+    socket.on("game:error", handleGameError);
 
     return () => {
-      socket.off("connect");
-      socket.off("room:created");
-      socket.off("room:updated");
-      socket.off("game:updated");
-      socket.off("game:error");
+      socket.off("room:created", handleRoomCreated);
+      socket.off("room:joined", handleRoomJoined);
+      socket.off("room:updated", handleRoomUpdated);
+      socket.off("game:error", handleGameError);
     };
   }, []);
 
-  const currentPlayer = game?.players?.[game.currentPlayerIndex];
-  const topCard = game?.discardPile?.[game.discardPile.length - 1];
-  const winner = game?.players?.find(
-    (player: any) => player.id === game.winnerId,
-  );
+  const handleCreateRoom = () => {
+    if (!canCreateRoom) {
+      setMessage("Escribe tu nombre para crear una partida.");
+      return;
+    }
+
+    setMessage("");
+    socket.emit("room:create", {
+      playerName: trimmedPlayerName,
+    });
+  };
+
+  const handleJoinRoom = () => {
+    if (!canJoinRoom) {
+      setMessage("Escribe tu nombre y el codigo de sala para unirte.");
+      return;
+    }
+
+    setMessage("");
+    socket.emit("room:join", {
+      playerName: trimmedPlayerName,
+      roomId: trimmedRoomId,
+    });
+  };
+
+  const handleJoinSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    handleJoinRoom();
+  };
+
+  const handleStartGame = () => {
+    if (!room || !isHost) {
+      return;
+    }
+
+    socket.emit("game:start", {
+      roomId: room.id,
+    });
+  };
 
   return (
-    <>
-      <h1>UNO Socket Test</h1>
+    <main className="app-shell">
+      <section className="welcome-panel" aria-labelledby="app-title">
+        <header className="welcome-header">
+          <h1 id="app-title">UNO Privado</h1>
+          <p>Crea una partida o unete a una sala existente</p>
+        </header>
 
-      {room?.paused && (
-        <div>
-          <h2>⏸️ Partida pausada</h2>
-          <p>
-            Un jugador se desconectó. La partida continuará cuando se reconecte.
-          </p>
-        </div>
-      )}
+        <div className="game-card">
+          {room ? (
+            <section className="lobby-section" aria-labelledby="lobby-title">
+              <div className="room-code">
+                <span>Codigo de sala</span>
+                <strong>{room.id}</strong>
+              </div>
 
-      <input
-        placeholder="Nombre"
-        value={playerName}
-        onChange={(e) => setPlayerName(e.target.value)}
-      />
+              <div>
+                <h2 id="lobby-title">Lobby</h2>
+                <p>Jugadores en la sala</p>
+              </div>
 
-      <input
-        placeholder="ID de sala"
-        value={roomId}
-        onChange={(e) => setRoomId(e.target.value.toUpperCase())}
-      />
+              <ul className="player-list">
+                {room.players.map((player) => (
+                  <li key={player.id}>
+                    <span>{player.name}</span>
+                    {player.id === room.hostId && <small>Anfitrion</small>}
+                  </li>
+                ))}
+              </ul>
 
-      <button
-        onClick={() => {
-          socket.emit("room:create", {
-            playerName: playerName || "Jugador 1",
-          });
-        }}
-      >
-        Crear sala
-      </button>
-
-      <button
-        onClick={() => {
-          socket.emit("room:join", {
-            roomId,
-            playerName: playerName || "Jugador 2",
-          });
-        }}
-      >
-        Unirse a sala
-      </button>
-
-      <button
-        onClick={() => {
-          socket.emit("game:start", {
-            roomId,
-          });
-        }}
-      >
-        Iniciar partida
-      </button>
-
-      <button
-        onClick={() => {
-          socket.emit("room:reconnect", {
-            roomId,
-            playerName,
-          });
-        }}
-      >
-        Reconectar a sala
-      </button>
-
-      {game && (
-        <div>
-          <h2>Partida</h2>
-
-          {game.status === "finished" && (
-            <p>🏆 Partida finalizada. El ganador es: {winner?.name}</p>
-          )}
-
-          <p>Turno de: {currentPlayer?.name}</p>
-
-          <p>Color actual: {game.currentColor}</p>
-
-          <p>Draw stack: {game.drawStack}</p>
-
-          <p>
-            Carta superior: {topCard?.color} {topCard?.value}
-          </p>
-
-          {game.drawStack > 0 ? (
-            <button
-              disabled={game.status === "finished" || room?.paused}
-              onClick={() => {
-                socket.emit("game:resolveDrawStack", {
-                  roomId,
-                });
-              }}
-            >
-              Robar acumulación ({game.drawStack})
-            </button>
-          ) : (
-            <button
-              disabled={game.status === "finished" || room?.paused}
-              onClick={() => {
-                socket.emit("game:drawForTurn", {
-                  roomId,
-                });
-              }}
-            >
-              Robar carta
-            </button>
-          )}
-
-          {currentPlayer?.hand?.length === 2 && (
-            <button
-              disabled={game.status === "finished" || room?.paused}
-              onClick={() => {
-                socket.emit("game:sayUno", {
-                  roomId,
-                });
-              }}
-            >
-              Decir UNO
-            </button>
-          )}
-
-          <h3>Jugadores</h3>
-
-          {game.players.map((player: any) => (
-            <div key={player.id}>
-              <span>
-                {player.name} - cartas:{" "}
-                {player.handCount ?? player.hand?.length}
-              </span>
-
-              {player.handCount === 1 && (
+              {isHost && (
                 <button
-                  disabled={game.status === "finished" || room?.paused}
-                  onClick={() => {
-                    socket.emit("game:challengeUno", {
-                      roomId,
-                      targetPlayerId: player.id,
-                    });
-                  }}
+                  className="primary-button"
+                  type="button"
+                  onClick={handleStartGame}
                 >
-                  Retar UNO
+                  Iniciar partida
                 </button>
               )}
-            </div>
-          ))}
+            </section>
+          ) : (
+            <>
+              <label className="field">
+                <span>Nombre del jugador</span>
+                <input
+                  type="text"
+                  value={playerName}
+                  onChange={(event) => {
+                    setPlayerName(event.target.value);
+                    setMessage("");
+                  }}
+                  placeholder="Tu nombre"
+                  autoComplete="name"
+                  required
+                />
+              </label>
 
-          <h3>Cartas del jugador actual</h3>
+              <button
+                className="primary-button"
+                type="button"
+                onClick={handleCreateRoom}
+                disabled={!canCreateRoom}
+              >
+                Crear partida
+              </button>
 
-          {currentPlayer?.hand.map((card: any) => (
-            <button
-              key={card.id}
-              onClick={() => {
-                const chosenColor =
-                  card.color === "wild"
-                    ? prompt("Elige color: red, blue, green, yellow") ||
-                      undefined
-                    : undefined;
+              <form className="join-section" onSubmit={handleJoinSubmit}>
+                <div>
+                  <h2>Unirse a partida</h2>
+                  <p>Ingresa el ID o codigo de la sala.</p>
+                </div>
 
-                socket.emit("game:playCard", {
-                  roomId,
-                  cardId: card.id,
-                  chosenColor,
-                });
-              }}
-            >
-              {card.color} {card.value}
-            </button>
-          ))}
+                <label className="field">
+                  <span>ID/codigo de sala</span>
+                  <input
+                    type="text"
+                    value={roomId}
+                    onChange={(event) => {
+                      setRoomId(event.target.value.toUpperCase());
+                      setMessage("");
+                    }}
+                    placeholder="Ej. ABC123"
+                    required
+                  />
+                </label>
+
+                <button type="submit" disabled={!canJoinRoom}>
+                  Unirse a partida
+                </button>
+              </form>
+            </>
+          )}
+
+          {message && <p className="form-message">{message}</p>}
         </div>
-      )}
-    </>
+      </section>
+    </main>
   );
 }
 
