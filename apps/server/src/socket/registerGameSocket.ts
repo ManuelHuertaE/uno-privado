@@ -270,7 +270,7 @@ export function registerGameSocket(io: Server): void {
     socket.on("game:play-card", handlePlayCard);
     socket.on("game:playCard", handlePlayCard);
 
-    socket.on("game:drawForTurn", (payload: unknown) => {
+    const handleDrawCard = (payload: unknown) => {
       try {
         const roomId = readRequiredString(
           readPayloadField(payload, "roomId"),
@@ -283,12 +283,36 @@ export function registerGameSocket(io: Server): void {
           throw new Error("La sala no existe.");
         }
 
+        if (!room.started) {
+          throw new Error("La partida no ha iniciado.");
+        }
+
+        if (!room.game) {
+          throw new Error("No hay estado de partida para esta sala.");
+        }
+
         const player = room.players.find(
           (player) => player.socketId === socket.id,
         );
 
         if (!player) {
           throw new Error("No perteneces a esta sala.");
+        }
+
+        const currentPlayer = room.game.players[room.game.currentPlayerIndex];
+
+        if (!currentPlayer) {
+          throw new Error("No hay jugador actual.");
+        }
+
+        if (currentPlayer.id !== player.id) {
+          throw new Error("No es el turno de este jugador.");
+        }
+
+        if (room.game.drawStack > 0) {
+          throw new Error(
+            "Primero debes resolver el acumulado de robo activo.",
+          );
         }
 
         const updatedRoom = roomManager.drawForTurn(roomId, player.id);
@@ -306,9 +330,12 @@ export function registerGameSocket(io: Server): void {
       } catch (error) {
         emitGameError(socket, error);
       }
-    });
+    };
 
-    socket.on("game:resolveDrawStack", (payload: unknown) => {
+    socket.on("game:draw-card", handleDrawCard);
+    socket.on("game:drawForTurn", handleDrawCard);
+
+    const handleResolveDrawStack = (payload: unknown) => {
       try {
         const roomId = readRequiredString(
           readPayloadField(payload, "roomId"),
@@ -321,12 +348,34 @@ export function registerGameSocket(io: Server): void {
           throw new Error("La sala no existe.");
         }
 
+        if (!room.started) {
+          throw new Error("La partida no ha iniciado.");
+        }
+
+        if (!room.game) {
+          throw new Error("No hay estado de partida para esta sala.");
+        }
+
         const player = room.players.find(
           (player) => player.socketId === socket.id,
         );
 
         if (!player) {
           throw new Error("No perteneces a esta sala.");
+        }
+
+        const currentPlayer = room.game.players[room.game.currentPlayerIndex];
+
+        if (!currentPlayer) {
+          throw new Error("No hay jugador actual.");
+        }
+
+        if (currentPlayer.id !== player.id) {
+          throw new Error("No es el turno de este jugador.");
+        }
+
+        if (room.game.drawStack <= 0) {
+          throw new Error("No hay acumulacion de robo activa.");
         }
 
         const updatedRoom = roomManager.resolveDrawStack(roomId, player.id);
@@ -344,7 +393,10 @@ export function registerGameSocket(io: Server): void {
       } catch (error) {
         emitGameError(socket, error);
       }
-    });
+    };
+
+    socket.on("game:resolve-draw-stack", handleResolveDrawStack);
+    socket.on("game:resolveDrawStack", handleResolveDrawStack);
 
     socket.on("game:sayUno", (payload: unknown) => {
       try {

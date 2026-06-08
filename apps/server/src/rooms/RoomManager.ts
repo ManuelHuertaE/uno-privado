@@ -2,7 +2,9 @@
 import {
   createGame,
   drawCards,
+  drawForTurn as drawForTurnCore,
   playCard as playCardCore,
+  resolveDrawStack as resolveDrawStackCore,
 } from "@uno/game-core";
 import type { Room, RoomPlayer } from "./types";
 import type { CardColor } from "@uno/shared";
@@ -226,12 +228,9 @@ export class RoomManager {
       );
     }
 
-    const updatedGame = drawCards({
+    const updatedGame = drawForTurnCore({
       game: room.game,
       playerId,
-      amount: 1,
-      clearDrawStack: false,
-      advanceTurn: false,
     });
 
     const updatedRoom: Room = {
@@ -277,12 +276,9 @@ export class RoomManager {
       throw new Error("No hay acumulación de robo activa.");
     }
 
-    const updatedGame = drawCards({
+    const updatedGame = resolveDrawStackCore({
       game: room.game,
       playerId,
-      amount: room.game.drawStack,
-      clearDrawStack: true,
-      advanceTurn: true,
     });
 
     const updatedRoom: Room = {

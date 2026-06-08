@@ -71,6 +71,7 @@ function App() {
   const [message, setMessage] = useState("");
   const [room, setRoom] = useState<Room | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
+  const [socketId, setSocketId] = useState(socket.id);
   const [selectedColor, setSelectedColor] = useState<PlayableColor | "">("");
 
   const trimmedPlayerName = playerName.trim();
@@ -78,7 +79,7 @@ function App() {
   const canCreateRoom = trimmedPlayerName.length > 0;
   const canJoinRoom = canCreateRoom && trimmedRoomId.length > 0;
   const currentPlayer = room?.players.find(
-    (player) => player.socketId === socket.id,
+    (player) => player.socketId === socketId,
   );
   const isHost = Boolean(currentPlayer && currentPlayer.id === room?.hostId);
   const canStartGame = Boolean(isHost && room && room.players.length >= 2);
@@ -89,9 +90,20 @@ function App() {
   const isLocalTurn = Boolean(
     currentGamePlayer && currentGamePlayer.id === localGamePlayer?.id,
   );
+  const canDrawCard = Boolean(
+    gameState && isLocalTurn && gameState.drawStack === 0,
+  );
   const topDiscard = gameState?.discardPile.at(-1);
 
   useEffect(() => {
+    const handleConnect = () => {
+      setSocketId(socket.id);
+    };
+
+    const handleDisconnect = () => {
+      setSocketId(undefined);
+    };
+
     const handleRoomCreated = (createdRoom: Room) => {
       setRoom(createdRoom);
       setRoomId(createdRoom.id);
@@ -130,6 +142,8 @@ function App() {
       );
     };
 
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
     socket.on("room:created", handleRoomCreated);
     socket.on("room:joined", handleRoomJoined);
     socket.on("room:updated", handleRoomUpdated);
@@ -137,7 +151,13 @@ function App() {
     socket.on("game:updated", handleGameUpdated);
     socket.on("game:error", handleGameError);
 
+    if (socket.connected) {
+      setSocketId(socket.id);
+    }
+
     return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
       socket.off("room:created", handleRoomCreated);
       socket.off("room:joined", handleRoomJoined);
       socket.off("room:updated", handleRoomUpdated);
@@ -206,11 +226,23 @@ function App() {
   };
 
   const handleDrawCard = () => {
-    if (!room) {
+    if (!room || !canDrawCard) {
       return;
     }
 
-    console.log("TODO emit game:draw-card", {
+    setMessage("");
+    socket.emit("game:draw-card", {
+      roomId: room.id,
+    });
+  };
+
+  const handleResolveDrawStack = () => {
+    if (!room || !gameState || gameState.drawStack <= 0) {
+      return;
+    }
+
+    setMessage("");
+    socket.emit("game:resolve-draw-stack", {
       roomId: room.id,
     });
   };
@@ -265,6 +297,30 @@ function App() {
                 </div>
               </dl>
 
+              {gameState.drawStack > 0 && (
+                <section
+                  className="draw-stack-panel"
+                  aria-labelledby="draw-stack-title"
+                >
+                  <h3 id="draw-stack-title">Robo acumulado</h3>
+                  {isLocalTurn ? (
+                    <>
+                      <p>
+                        Debes robar {gameState.drawStack} cartas o acumular con
+                        otra carta valida.
+                      </p>
+                      <button type="button" onClick={handleResolveDrawStack}>
+                        Robar {gameState.drawStack} cartas
+                      </button>
+                    </>
+                  ) : (
+                    <p>
+                      Esperando a que el jugador actual responda al +2/+4.
+                    </p>
+                  )}
+                </section>
+              )}
+
               <div>
                 <h3>Jugadores</h3>
                 <ul className="player-list">
@@ -316,9 +372,15 @@ function App() {
               </div>
 
               <div className="game-actions">
-                <button type="button" onClick={handleDrawCard}>
-                  Robar carta
-                </button>
+                {gameState.drawStack === 0 && (
+                  <button
+                    type="button"
+                    onClick={handleDrawCard}
+                    disabled={!canDrawCard}
+                  >
+                    Robar carta
+                  </button>
+                )}
                 <button type="button" onClick={handleSayUno}>
                   Decir UNO
                 </button>

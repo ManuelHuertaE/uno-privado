@@ -233,6 +233,30 @@ button:disabled {
   font-weight: 700;
 }
 
+.draw-stack-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff1f2;
+}
+
+.draw-stack-panel p {
+  margin: 0;
+  color: #7f1d1d;
+}
+
+.draw-stack-panel button {
+  align-self: flex-start;
+  background: #dc2626;
+}
+
+.draw-stack-panel button:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
 .hand-actions {
   display: flex;
   flex-wrap: wrap;
