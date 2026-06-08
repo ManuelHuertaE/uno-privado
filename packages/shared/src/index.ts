@@ -42,6 +42,7 @@ export interface GameState {
   drawStack: number;
   unoDeclaredPlayerIds: string[];
   unoPenaltyPlayerIds: string[];
+  winnerId?: string;
 }
 
 export interface PublicPlayer {

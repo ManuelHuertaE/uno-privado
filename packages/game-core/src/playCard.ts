@@ -113,6 +113,7 @@ export function playCard({
         ? chosenColor!
         : cardToPlay.color,
       status: playerAfterMove.hand.length === 0 ? "finished" : game.status,
+      winnerId: playerAfterMove.hand.length === 0 ? playerId : game.winnerId,
     },
     playerId
   );

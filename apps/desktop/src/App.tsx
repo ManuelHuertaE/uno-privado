@@ -43,6 +43,9 @@ function App() {
 
   const currentPlayer = game?.players?.[game.currentPlayerIndex];
   const topCard = game?.discardPile?.[game.discardPile.length - 1];
+  const winner = game?.players?.find(
+  (player: any) => player.id === game.winnerId
+);
 
   return (
     <>
@@ -95,6 +98,10 @@ function App() {
         <div>
           <h2>Partida</h2>
 
+          {game.status === "finished" && (
+            <p>🏆 Partida finalizada. El ganador es: {winner?.name}</p>
+          )}
+
           <p>Turno de: {currentPlayer?.name}</p>
 
           <p>Color actual: {game.currentColor}</p>
@@ -107,6 +114,7 @@ function App() {
 
           {game.drawStack > 0 ? (
             <button
+            disabled={game.status === "finished"}
               onClick={() => {
                 socket.emit("game:resolveDrawStack", {
                   roomId,
@@ -117,6 +125,7 @@ function App() {
             </button>
           ) : (
             <button
+              disabled={game.status === "finished"}
               onClick={() => {
                 socket.emit("game:drawForTurn", {
                   roomId,
@@ -129,6 +138,7 @@ function App() {
 
           {currentPlayer?.hand?.length === 2 && (
             <button
+              disabled={game.status === "finished"}
               onClick={() => {
                 socket.emit("game:sayUno", {
                   roomId,
@@ -150,6 +160,7 @@ function App() {
 
               {player.handCount === 1 && (
                 <button
+                  disabled={game.status === "finished"}
                   onClick={() => {
                     socket.emit("game:challengeUno", {
                       roomId,
