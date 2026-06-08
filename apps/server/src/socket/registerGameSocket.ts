@@ -1,5 +1,12 @@
 import type { Server, Socket } from "socket.io";
+import type { CardColor } from "@uno/shared";
 import { roomManager } from "../rooms/RoomManager";
+
+type PlayCardPayload = {
+  roomId: string;
+  cardId: string;
+  chosenColor?: Exclude<CardColor, "wild">;
+};
 
 function readRequiredString(value: unknown, fieldName: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -14,6 +21,31 @@ function readPayloadField(payload: unknown, fieldName: string): unknown {
     return undefined;
   }
   return (payload as Record<string, unknown>)[fieldName];
+}
+
+function readChosenColor(value: unknown): Exclude<CardColor, "wild"> | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (
+    value === "red" ||
+    value === "blue" ||
+    value === "green" ||
+    value === "yellow"
+  ) {
+    return value;
+  }
+
+  throw new Error("chosenColor debe ser red, blue, green o yellow.");
+}
+
+function readPlayCardPayload(payload: unknown): PlayCardPayload {
+  return {
+    roomId: readRequiredString(readPayloadField(payload, "roomId"), "roomId"),
+    cardId: readRequiredString(readPayloadField(payload, "cardId"), "cardId"),
+    chosenColor: readChosenColor(readPayloadField(payload, "chosenColor")),
+  };
 }
 
 function emitPrivateGameState(
@@ -188,27 +220,22 @@ export function registerGameSocket(io: Server): void {
       }
     });
 
-    socket.on("game:playCard", (payload: unknown) => {
+    const handlePlayCard = (payload: unknown) => {
       try {
-        const roomId = readRequiredString(
-          readPayloadField(payload, "roomId"),
-          "roomId",
-        );
-
-        const cardId = readRequiredString(
-          readPayloadField(payload, "cardId"),
-          "cardId",
-        );
-
-        const chosenColorValue = readPayloadField(payload, "chosenColor");
-
-        const chosenColor =
-          typeof chosenColorValue === "string" ? chosenColorValue : undefined;
+        const { roomId, cardId, chosenColor } = readPlayCardPayload(payload);
 
         const room = roomManager.getRoom(roomId);
 
         if (!room) {
           throw new Error("La sala no existe.");
+        }
+
+        if (!room.started) {
+          throw new Error("La partida no ha iniciado.");
+        }
+
+        if (!room.game) {
+          throw new Error("No hay estado de partida para esta sala.");
         }
 
         const player = room.players.find(
@@ -223,7 +250,7 @@ export function registerGameSocket(io: Server): void {
           roomId,
           player.id,
           cardId,
-          chosenColor as never,
+          chosenColor,
         );
 
         console.log(
@@ -238,7 +265,10 @@ export function registerGameSocket(io: Server): void {
       } catch (error) {
         emitGameError(socket, error);
       }
-    });
+    };
+
+    socket.on("game:play-card", handlePlayCard);
+    socket.on("game:playCard", handlePlayCard);
 
     socket.on("game:drawForTurn", (payload: unknown) => {
       try {

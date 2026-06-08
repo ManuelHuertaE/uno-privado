@@ -4,6 +4,7 @@ import { io } from "socket.io-client";
 import "./App.css";
 
 type CardColor = "red" | "blue" | "green" | "yellow" | "wild";
+type PlayableColor = Exclude<CardColor, "wild">;
 
 type Card = {
   id: string;
@@ -60,14 +61,17 @@ function formatCard(card: Card | undefined): string {
   return card.color === "wild" ? card.value : `${card.color} ${card.value}`;
 }
 
+function isWildCard(card: Card): boolean {
+  return card.value === "wild" || card.value === "wildDraw4";
+}
+
 function App() {
   const [playerName, setPlayerName] = useState("");
   const [roomId, setRoomId] = useState("");
   const [message, setMessage] = useState("");
   const [room, setRoom] = useState<Room | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
-  const [selectedColor, setSelectedColor] =
-    useState<Exclude<CardColor, "wild">>("red");
+  const [selectedColor, setSelectedColor] = useState<PlayableColor | "">("");
 
   const trimmedPlayerName = playerName.trim();
   const trimmedRoomId = roomId.trim();
@@ -81,6 +85,9 @@ function App() {
   const currentGamePlayer = gameState?.players[gameState.currentPlayerIndex];
   const localGamePlayer = gameState?.players.find(
     (player) => player.id === currentPlayer?.id,
+  );
+  const isLocalTurn = Boolean(
+    currentGamePlayer && currentGamePlayer.id === localGamePlayer?.id,
   );
   const topDiscard = gameState?.discardPile.at(-1);
 
@@ -185,10 +192,16 @@ function App() {
       return;
     }
 
-    console.log("TODO emit game:play-card", {
+    if (isWildCard(card) && !selectedColor) {
+      setMessage("Elige un color antes de jugar un comodin.");
+      return;
+    }
+
+    setMessage("");
+    socket.emit("game:play-card", {
       roomId: room.id,
       cardId: card.id,
-      chosenColor: card.color === "wild" ? selectedColor : undefined,
+      chosenColor: isWildCard(card) ? selectedColor : undefined,
     });
   };
 
@@ -271,11 +284,10 @@ function App() {
                 <select
                   value={selectedColor}
                   onChange={(event) =>
-                    setSelectedColor(
-                      event.target.value as Exclude<CardColor, "wild">,
-                    )
+                    setSelectedColor(event.target.value as PlayableColor | "")
                   }
                 >
+                  <option value="">Elegir color</option>
                   <option value="red">red</option>
                   <option value="blue">blue</option>
                   <option value="green">green</option>
@@ -292,6 +304,7 @@ function App() {
                         key={card.id}
                         type="button"
                         onClick={() => handlePlayCard(card)}
+                        disabled={!isLocalTurn}
                       >
                         {formatCard(card)}
                       </button>
