@@ -86,6 +86,12 @@ function emitGameError(socket: Socket, error: unknown): void {
   });
 }
 
+function assertGameIsActive(status: string): void {
+  if (status === "finished") {
+    throw new Error("La partida ya finalizó.");
+  }
+}
+
 export function registerGameSocket(io: Server): void {
   io.on("connection", (socket) => {
     console.log("Cliente conectado:", socket.id);
@@ -238,6 +244,8 @@ export function registerGameSocket(io: Server): void {
           throw new Error("No hay estado de partida para esta sala.");
         }
 
+        assertGameIsActive(room.game.status);
+
         const player = room.players.find(
           (player) => player.socketId === socket.id,
         );
@@ -261,6 +269,19 @@ export function registerGameSocket(io: Server): void {
           ...updatedRoom,
           game: null,
         });
+
+        const playerAfterMove = updatedRoom.game?.players.find(
+          (gamePlayer) => gamePlayer.id === player.id,
+        );
+
+        if (
+          updatedRoom.game?.status === "finished" &&
+          updatedRoom.game.winnerId === player.id &&
+          playerAfterMove?.hand.length === 0
+        ) {
+          emitPrivateGameState(io, updatedRoom.id, "game:finished");
+        }
+
         emitPrivateGameState(io, updatedRoom.id);
       } catch (error) {
         emitGameError(socket, error);
@@ -290,6 +311,8 @@ export function registerGameSocket(io: Server): void {
         if (!room.game) {
           throw new Error("No hay estado de partida para esta sala.");
         }
+
+        assertGameIsActive(room.game.status);
 
         const player = room.players.find(
           (player) => player.socketId === socket.id,
@@ -356,6 +379,8 @@ export function registerGameSocket(io: Server): void {
           throw new Error("No hay estado de partida para esta sala.");
         }
 
+        assertGameIsActive(room.game.status);
+
         const player = room.players.find(
           (player) => player.socketId === socket.id,
         );
@@ -398,7 +423,7 @@ export function registerGameSocket(io: Server): void {
     socket.on("game:resolve-draw-stack", handleResolveDrawStack);
     socket.on("game:resolveDrawStack", handleResolveDrawStack);
 
-    socket.on("game:sayUno", (payload: unknown) => {
+    const handleSayUno = (payload: unknown) => {
       try {
         const roomId = readRequiredString(
           readPayloadField(payload, "roomId"),
@@ -410,6 +435,12 @@ export function registerGameSocket(io: Server): void {
         if (!room) {
           throw new Error("La sala no existe.");
         }
+
+        if (!room.game) {
+          throw new Error("No hay estado de partida para esta sala.");
+        }
+
+        assertGameIsActive(room.game.status);
 
         const player = room.players.find(
           (player) => player.socketId === socket.id,
@@ -434,9 +465,12 @@ export function registerGameSocket(io: Server): void {
       } catch (error) {
         emitGameError(socket, error);
       }
-    });
+    };
 
-    socket.on("game:challengeUno", (payload: unknown) => {
+    socket.on("game:say-uno", handleSayUno);
+    socket.on("game:sayUno", handleSayUno);
+
+    const handleChallengeUno = (payload: unknown) => {
       try {
         const roomId = readRequiredString(
           readPayloadField(payload, "roomId"),
@@ -453,6 +487,12 @@ export function registerGameSocket(io: Server): void {
         if (!room) {
           throw new Error("La sala no existe.");
         }
+
+        if (!room.game) {
+          throw new Error("No hay estado de partida para esta sala.");
+        }
+
+        assertGameIsActive(room.game.status);
 
         const challenger = room.players.find(
           (player) => player.socketId === socket.id,
@@ -481,7 +521,10 @@ export function registerGameSocket(io: Server): void {
       } catch (error) {
         emitGameError(socket, error);
       }
-    });
+    };
+
+    socket.on("game:challenge-uno", handleChallengeUno);
+    socket.on("game:challengeUno", handleChallengeUno);
 
     socket.on("disconnect", () => {
       console.log("Cliente desconectado:", socket.id);

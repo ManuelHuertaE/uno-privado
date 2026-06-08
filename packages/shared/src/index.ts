@@ -68,4 +68,5 @@ export interface PlayerGameView {
   canResolveDrawStack: boolean;
   hasDeclaredUno: boolean;
   status: "waiting" | "playing" | "finished";
+  winnerId?: string;
 }

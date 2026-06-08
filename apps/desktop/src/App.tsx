@@ -90,10 +90,16 @@ function App() {
   const isLocalTurn = Boolean(
     currentGamePlayer && currentGamePlayer.id === localGamePlayer?.id,
   );
+  const isGameFinished = gameState?.status === "finished";
+  const winnerPlayer = gameState?.players.find(
+    (player) => player.id === gameState.winnerId,
+  );
   const canDrawCard = Boolean(
-    gameState && isLocalTurn && gameState.drawStack === 0,
+    gameState && !isGameFinished && isLocalTurn && gameState.drawStack === 0,
   );
   const topDiscard = gameState?.discardPile.at(-1);
+  const getCardCount = (player: GamePlayer) =>
+    player.handCount ?? player.hand.length;
 
   useEffect(() => {
     const handleConnect = () => {
@@ -134,6 +140,11 @@ function App() {
       setMessage("");
     };
 
+    const handleGameFinished = (finishedGame: GameState) => {
+      setGameState(finishedGame);
+      setMessage("");
+    };
+
     const handleGameError = (error: ServerError | string) => {
       setMessage(
         typeof error === "string"
@@ -149,6 +160,7 @@ function App() {
     socket.on("room:updated", handleRoomUpdated);
     socket.on("game:started", handleGameStarted);
     socket.on("game:updated", handleGameUpdated);
+    socket.on("game:finished", handleGameFinished);
     socket.on("game:error", handleGameError);
 
     if (socket.connected) {
@@ -163,6 +175,7 @@ function App() {
       socket.off("room:updated", handleRoomUpdated);
       socket.off("game:started", handleGameStarted);
       socket.off("game:updated", handleGameUpdated);
+      socket.off("game:finished", handleGameFinished);
       socket.off("game:error", handleGameError);
     };
   }, []);
@@ -208,7 +221,7 @@ function App() {
   };
 
   const handlePlayCard = (card: Card) => {
-    if (!room) {
+    if (!room || isGameFinished) {
       return;
     }
 
@@ -226,7 +239,7 @@ function App() {
   };
 
   const handleDrawCard = () => {
-    if (!room || !canDrawCard) {
+    if (!room || isGameFinished || !canDrawCard) {
       return;
     }
 
@@ -237,7 +250,7 @@ function App() {
   };
 
   const handleResolveDrawStack = () => {
-    if (!room || !gameState || gameState.drawStack <= 0) {
+    if (!room || !gameState || isGameFinished || gameState.drawStack <= 0) {
       return;
     }
 
@@ -248,12 +261,25 @@ function App() {
   };
 
   const handleSayUno = () => {
-    if (!room) {
+    if (!room || isGameFinished) {
       return;
     }
 
-    console.log("TODO emit game:say-uno", {
+    setMessage("");
+    socket.emit("game:say-uno", {
       roomId: room.id,
+    });
+  };
+
+  const handleChallengeUno = (targetPlayerId: string) => {
+    if (!room || isGameFinished) {
+      return;
+    }
+
+    setMessage("");
+    socket.emit("game:challenge-uno", {
+      roomId: room.id,
+      targetPlayerId,
     });
   };
 
@@ -297,7 +323,28 @@ function App() {
                 </div>
               </dl>
 
-              {gameState.drawStack > 0 && (
+              {isGameFinished && (
+                <section className="finished-panel" aria-labelledby="finished-title">
+                  <h2 id="finished-title">Partida finalizada</h2>
+                  <p>Ganador: {winnerPlayer?.name ?? "Sin ganador"}</p>
+                  <p>Codigo de sala: {room.id}</p>
+
+                  <h3>Jugadores</h3>
+                  <ul className="player-list">
+                    {gameState.players.map((player) => (
+                      <li key={player.id}>
+                        <span>
+                          {player.name}
+                          {player.id === gameState.winnerId ? " (ganador)" : ""}
+                        </span>
+                        <small>{getCardCount(player)} cartas</small>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {!isGameFinished && gameState.drawStack > 0 && (
                 <section
                   className="draw-stack-panel"
                   aria-labelledby="draw-stack-title"
@@ -321,70 +368,87 @@ function App() {
                 </section>
               )}
 
-              <div>
-                <h3>Jugadores</h3>
-                <ul className="player-list">
-                  {gameState.players.map((player) => (
-                    <li key={player.id}>
-                      <span>{player.name}</span>
-                      <small>
-                        {player.handCount ?? player.hand.length} cartas
-                      </small>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <label className="field">
-                <span>Color para comodines</span>
-                <select
-                  value={selectedColor}
-                  onChange={(event) =>
-                    setSelectedColor(event.target.value as PlayableColor | "")
-                  }
-                >
-                  <option value="">Elegir color</option>
-                  <option value="red">red</option>
-                  <option value="blue">blue</option>
-                  <option value="green">green</option>
-                  <option value="yellow">yellow</option>
-                </select>
-              </label>
-
-              <div>
-                <h3>Tu mano</h3>
-                <div className="hand-actions">
-                  {localGamePlayer?.hand.length ? (
-                    localGamePlayer.hand.map((card) => (
-                      <button
-                        key={card.id}
-                        type="button"
-                        onClick={() => handlePlayCard(card)}
-                        disabled={!isLocalTurn}
-                      >
-                        {formatCard(card)}
-                      </button>
-                    ))
-                  ) : (
-                    <p className="empty-state">No hay cartas para mostrar.</p>
-                  )}
+              {!isGameFinished && (
+                <div>
+                  <h3>Jugadores</h3>
+                  <ul className="player-list">
+                    {gameState.players.map((player) => (
+                      <li key={player.id}>
+                        <span>{player.name}</span>
+                        <div className="player-meta">
+                          <small>{getCardCount(player)} cartas</small>
+                          {player.id !== localGamePlayer?.id && (
+                            <button
+                              type="button"
+                              onClick={() => handleChallengeUno(player.id)}
+                              disabled={isGameFinished}
+                            >
+                              Retar UNO
+                            </button>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              </div>
+              )}
 
-              <div className="game-actions">
-                {gameState.drawStack === 0 && (
-                  <button
-                    type="button"
-                    onClick={handleDrawCard}
-                    disabled={!canDrawCard}
+              {!isGameFinished && (
+                <label className="field">
+                  <span>Color para comodines</span>
+                  <select
+                    value={selectedColor}
+                    onChange={(event) =>
+                      setSelectedColor(event.target.value as PlayableColor | "")
+                    }
                   >
-                    Robar carta
+                    <option value="">Elegir color</option>
+                    <option value="red">red</option>
+                    <option value="blue">blue</option>
+                    <option value="green">green</option>
+                    <option value="yellow">yellow</option>
+                  </select>
+                </label>
+              )}
+
+              {!isGameFinished && (
+                <div>
+                  <h3>Tu mano</h3>
+                  <div className="hand-actions">
+                    {localGamePlayer?.hand.length ? (
+                      localGamePlayer.hand.map((card) => (
+                        <button
+                          key={card.id}
+                          type="button"
+                          onClick={() => handlePlayCard(card)}
+                          disabled={!isLocalTurn || isGameFinished}
+                        >
+                          {formatCard(card)}
+                        </button>
+                      ))
+                    ) : (
+                      <p className="empty-state">No hay cartas para mostrar.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {!isGameFinished && (
+                <div className="game-actions">
+                  {gameState.drawStack === 0 && (
+                    <button
+                      type="button"
+                      onClick={handleDrawCard}
+                      disabled={!canDrawCard}
+                    >
+                      Robar carta
+                    </button>
+                  )}
+                  <button type="button" onClick={handleSayUno}>
+                    Decir UNO
                   </button>
-                )}
-                <button type="button" onClick={handleSayUno}>
-                  Decir UNO
-                </button>
-              </div>
+                </div>
+              )}
             </section>
           ) : room ? (
             <section className="lobby-section" aria-labelledby="lobby-title">

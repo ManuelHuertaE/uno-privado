@@ -311,6 +311,10 @@ export class RoomManager {
       throw new Error("La partida no ha iniciado.");
     }
 
+    if (room.game.status === "finished") {
+      throw new Error("La partida ya finalizó.");
+    }
+
     const updatedGame = playCardCore({
       game: room.game,
       playerId,

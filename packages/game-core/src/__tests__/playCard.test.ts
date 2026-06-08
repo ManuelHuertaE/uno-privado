@@ -351,6 +351,7 @@ describe("playCard", () => {
     });
 
     expect(updatedGame.status).toBe("finished");
+    expect(updatedGame.winnerId).toBe("player-1");
     expect(updatedGame.currentPlayerIndex).toBe(0);
     expect(updatedGame.unoPenaltyPlayerIds).toEqual([]);
     expect(updatedGame.unoDeclaredPlayerIds).toEqual([]);

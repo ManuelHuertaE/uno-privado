@@ -45,5 +45,6 @@ export function getPlayerView({
     canResolveDrawStack: isCurrentPlayer && game.drawStack > 0,
     hasDeclaredUno: game.unoDeclaredPlayerIds.includes(playerId),
     status: game.status,
+    winnerId: game.winnerId,
   };
 }
