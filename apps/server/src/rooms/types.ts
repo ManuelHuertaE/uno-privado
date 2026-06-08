@@ -12,4 +12,6 @@ export type Room = {
   players: RoomPlayer[];
   started: boolean;
   game: GameState | null;
+  paused: boolean;
+  disconnectedPlayerIds: string[];
 };

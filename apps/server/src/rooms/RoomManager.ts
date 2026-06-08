@@ -1,5 +1,9 @@
 // import { randomUUID } from "node:crypto";
-import { createGame, drawCards, playCard as playCardCore } from '@uno/game-core'
+import {
+  createGame,
+  drawCards,
+  playCard as playCardCore,
+} from "@uno/game-core";
 import type { Room, RoomPlayer } from "./types";
 import type { CardColor } from "@uno/shared";
 
@@ -50,6 +54,8 @@ export class RoomManager {
       players: [host],
       started: false,
       game: null,
+      paused: false,
+      disconnectedPlayerIds: [],
     };
 
     this.rooms.set(room.id, room);
@@ -62,6 +68,10 @@ export class RoomManager {
 
     if (!room) {
       throw new Error("La sala no existe.");
+    }
+
+    if (room.paused) {
+      throw new Error("La sala esta pausada por desconexión de un jugador.");
     }
 
     if (room.started) {
@@ -89,15 +99,35 @@ export class RoomManager {
   removePlayerBySocket(socketId: string): Room | undefined {
     for (const room of this.rooms.values()) {
       const playerIndex = room.players.findIndex(
-        (player) => player.socketId === socketId
+        (player) => player.socketId === socketId,
       );
 
       if (playerIndex === -1) {
         continue;
       }
 
+      const disconnectedPlayer = room.players[playerIndex];
+
+      if (room.started) {
+        const disconnectedPlayerIds = room.disconnectedPlayerIds.includes(
+          disconnectedPlayer.id,
+        )
+          ? room.disconnectedPlayerIds
+          : [...room.disconnectedPlayerIds, disconnectedPlayer.id];
+
+        const updatedRoom: Room = {
+          ...room,
+          paused: true,
+          disconnectedPlayerIds,
+        };
+
+        this.rooms.set(room.id, updatedRoom);
+
+        return updatedRoom;
+      }
+
       const players = room.players.filter(
-        (player) => player.socketId !== socketId
+        (player) => player.socketId !== socketId,
       );
 
       if (players.length === 0) {
@@ -108,9 +138,7 @@ export class RoomManager {
       const updatedRoom: Room = {
         ...room,
         hostId:
-          room.hostId === room.players[playerIndex].id
-            ? players[0].id
-            : room.hostId,
+          room.hostId === disconnectedPlayer.id ? players[0].id : room.hostId,
         players,
       };
 
@@ -123,290 +151,357 @@ export class RoomManager {
   }
 
   startGame(roomId: string, playerId: string): Room {
-  const room = this.rooms.get(roomId);
+    const room = this.rooms.get(roomId);
 
-  if (!room) {
-    throw new Error("La sala no existe.");
+    if (!room) {
+      throw new Error("La sala no existe.");
+    }
+
+    if (room.paused) {
+      throw new Error("La sala esta pausada por desconexión de un jugador.");
+    }
+
+    if (room.started) {
+      throw new Error("La partida ya inició.");
+    }
+
+    if (room.hostId !== playerId) {
+      throw new Error("Solo el host puede iniciar la partida.");
+    }
+
+    if (room.players.length < 2) {
+      throw new Error("Se necesitan al menos 2 jugadores para iniciar.");
+    }
+
+    const game = createGame({
+      players: room.players.map((player) => ({
+        id: player.id,
+        name: player.name,
+      })),
+    });
+
+    const updatedRoom: Room = {
+      ...room,
+      started: true,
+      game,
+    };
+
+    this.rooms.set(room.id, updatedRoom);
+
+    return updatedRoom;
   }
 
-  if (room.started) {
-    throw new Error("La partida ya inició.");
+  drawForTurn(roomId: string, playerId: string): Room {
+    const room = this.rooms.get(roomId);
+
+    if (!room) {
+      throw new Error("La sala no existe.");
+    }
+
+    if (room.paused) {
+      throw new Error("La sala esta pausada por desconexión de un jugador.");
+    }
+
+    if (!room.started || !room.game) {
+      throw new Error("La partida no ha iniciado.");
+    }
+
+    if (room.game.status !== "playing") {
+      throw new Error("La partida no está en curso.");
+    }
+
+    const currentPlayer = room.game.players[room.game.currentPlayerIndex];
+
+    if (!currentPlayer) {
+      throw new Error("No hay jugador actual.");
+    }
+
+    if (currentPlayer.id !== playerId) {
+      throw new Error("No es el turno de este jugador.");
+    }
+
+    if (room.game.drawStack > 0) {
+      throw new Error(
+        "Hay una acumulación de robo activa. Debes responder con una carta de robo o resolver la acumulación.",
+      );
+    }
+
+    const updatedGame = drawCards({
+      game: room.game,
+      playerId,
+      amount: 1,
+      clearDrawStack: false,
+      advanceTurn: false,
+    });
+
+    const updatedRoom: Room = {
+      ...room,
+      game: updatedGame,
+    };
+
+    this.rooms.set(room.id, updatedRoom);
+
+    return updatedRoom;
   }
 
-  if (room.hostId !== playerId) {
-    throw new Error("Solo el host puede iniciar la partida.");
+  resolveDrawStack(roomId: string, playerId: string): Room {
+    const room = this.rooms.get(roomId);
+
+    if (!room) {
+      throw new Error("La sala no existe.");
+    }
+
+    if (room.paused) {
+      throw new Error("La sala esta pausada por desconexión de un jugador.");
+    }
+
+    if (!room.started || !room.game) {
+      throw new Error("La partida no ha iniciado.");
+    }
+
+    if (room.game.status !== "playing") {
+      throw new Error("La partida no está en curso.");
+    }
+
+    const currentPlayer = room.game.players[room.game.currentPlayerIndex];
+
+    if (!currentPlayer) {
+      throw new Error("No hay jugador actual.");
+    }
+
+    if (currentPlayer.id !== playerId) {
+      throw new Error("No es el turno de este jugador.");
+    }
+
+    if (room.game.drawStack <= 0) {
+      throw new Error("No hay acumulación de robo activa.");
+    }
+
+    const updatedGame = drawCards({
+      game: room.game,
+      playerId,
+      amount: room.game.drawStack,
+      clearDrawStack: true,
+      advanceTurn: true,
+    });
+
+    const updatedRoom: Room = {
+      ...room,
+      game: updatedGame,
+    };
+
+    this.rooms.set(room.id, updatedRoom);
+
+    return updatedRoom;
   }
 
-  if (room.players.length < 2) {
-    throw new Error("Se necesitan al menos 2 jugadores para iniciar.");
+  playCard(
+    roomId: string,
+    playerId: string,
+    cardId: string,
+    chosenColor?: Exclude<CardColor, "wild">,
+  ): Room {
+    const room = this.rooms.get(roomId);
+
+    if (!room) {
+      throw new Error("La sala no existe.");
+    }
+
+    if (room.paused) {
+      throw new Error("La sala esta pausada por desconexión de un jugador.");
+    }
+
+    if (!room.started || !room.game) {
+      throw new Error("La partida no ha iniciado.");
+    }
+
+    const updatedGame = playCardCore({
+      game: room.game,
+      playerId,
+      cardId,
+      chosenColor,
+    });
+
+    const updatedRoom: Room = {
+      ...room,
+      game: updatedGame,
+    };
+
+    this.rooms.set(room.id, updatedRoom);
+
+    return updatedRoom;
   }
 
-  const game = createGame({
-    players: room.players.map((player) => ({
-      id: player.id,
-      name: player.name,
-    })),
-  });
+  sayUno(roomId: string, playerId: string): Room {
+    const room = this.rooms.get(roomId);
 
-  const updatedRoom: Room = {
-    ...room,
-    started: true,
-    game,
-  };
+    if (!room) {
+      throw new Error("La sala no existe.");
+    }
 
-  this.rooms.set(room.id, updatedRoom);
+    if (room.paused) {
+      throw new Error("La sala esta pausada por desconexión de un jugador.");
+    }
 
-  return updatedRoom;
-}
+    if (!room.started || !room.game) {
+      throw new Error("La partida no ha iniciado.");
+    }
 
-drawForTurn(roomId: string, playerId: string): Room {
-  const room = this.rooms.get(roomId);
+    if (room.game.status !== "playing") {
+      throw new Error("La partida no está en curso.");
+    }
 
-  if (!room) {
-    throw new Error("La sala no existe.");
+    const player = room.game.players.find((player) => player.id === playerId);
+
+    if (!player) {
+      throw new Error("El jugador no existe en la partida.");
+    }
+
+    if (player.hand.length !== 2) {
+      throw new Error(
+        "Solo puedes decir UNO cuando tienes exactamente 2 cartas.",
+      );
+    }
+
+    const unoDeclaredPlayerIds = room.game.unoDeclaredPlayerIds.includes(
+      playerId,
+    )
+      ? room.game.unoDeclaredPlayerIds
+      : [...room.game.unoDeclaredPlayerIds, playerId];
+
+    const updatedRoom: Room = {
+      ...room,
+      game: {
+        ...room.game,
+        unoDeclaredPlayerIds,
+        unoPenaltyPlayerIds: room.game.unoPenaltyPlayerIds.filter(
+          (penaltyPlayerId) => penaltyPlayerId !== playerId,
+        ),
+      },
+    };
+
+    this.rooms.set(room.id, updatedRoom);
+
+    return updatedRoom;
   }
 
-  if (!room.started || !room.game) {
-    throw new Error("La partida no ha iniciado.");
-  }
+  challengeUno(
+    roomId: string,
+    challengerId: string,
+    targetPlayerId: string,
+  ): Room {
+    const room = this.rooms.get(roomId);
 
-  if (room.game.status !== "playing") {
-    throw new Error("La partida no está en curso.");
-  }
+    if (!room) {
+      throw new Error("La sala no existe.");
+    }
 
-  const currentPlayer = room.game.players[room.game.currentPlayerIndex];
+    if (room.paused) {
+      throw new Error("La sala esta pausada por desconexión de un jugador.");
+    }
 
-  if (!currentPlayer) {
-    throw new Error("No hay jugador actual.");
-  }
+    if (!room.started || !room.game) {
+      throw new Error("La partida no ha iniciado.");
+    }
 
-  if (currentPlayer.id !== playerId) {
-    throw new Error("No es el turno de este jugador.");
-  }
+    if (room.game.status !== "playing") {
+      throw new Error("La partida no está en curso.");
+    }
 
-  if (room.game.drawStack > 0) {
-    throw new Error(
-      "Hay una acumulación de robo activa. Debes responder con una carta de robo o resolver la acumulación."
+    const challenger = room.game.players.find(
+      (player) => player.id === challengerId,
     );
+
+    if (!challenger) {
+      throw new Error("El jugador que reta no existe en la partida.");
+    }
+
+    const targetPlayer = room.game.players.find(
+      (player) => player.id === targetPlayerId,
+    );
+
+    if (!targetPlayer) {
+      throw new Error("El jugador retado no existe en la partida.");
+    }
+
+    if (challengerId === targetPlayerId) {
+      throw new Error("No puedes retarte a ti mismo.");
+    }
+
+    if (targetPlayer.hand.length !== 1) {
+      throw new Error("Solo puedes retar a un jugador que tenga una carta.");
+    }
+
+    if (!room.game.unoPenaltyPlayerIds.includes(targetPlayerId)) {
+      throw new Error("Ese jugador no puede ser penalizado por UNO.");
+    }
+
+    const gameAfterPenalty = drawCards({
+      game: room.game,
+      playerId: targetPlayerId,
+      amount: 2,
+      clearDrawStack: false,
+      advanceTurn: false,
+    });
+
+    const updatedRoom: Room = {
+      ...room,
+      game: {
+        ...gameAfterPenalty,
+        unoDeclaredPlayerIds: gameAfterPenalty.unoDeclaredPlayerIds.filter(
+          (declaredPlayerId) => declaredPlayerId !== targetPlayerId,
+        ),
+        unoPenaltyPlayerIds: gameAfterPenalty.unoPenaltyPlayerIds.filter(
+          (penaltyPlayerId) => penaltyPlayerId !== targetPlayerId,
+        ),
+      },
+    };
+
+    this.rooms.set(room.id, updatedRoom);
+
+    return updatedRoom;
   }
 
-  const updatedGame = drawCards({
-    game: room.game,
-    playerId,
-    amount: 1,
-    clearDrawStack: false,
-    advanceTurn: false,
-  });
+  reconnectPlayer(roomId: string, playerName: string, socketId: string): Room {
+    const room = this.rooms.get(roomId);
 
-  const updatedRoom: Room = {
-    ...room,
-    game: updatedGame,
-  };
+    if (!room) {
+      throw new Error("La sala no existe.");
+    }
 
-  this.rooms.set(room.id, updatedRoom);
+    if (!room.started || !room.paused) {
+      throw new Error("La sala no está esperando reconexión.");
+    }
 
-  return updatedRoom;
+    const player = room.players.find(
+      (player) =>
+        player.name === playerName &&
+        room.disconnectedPlayerIds.includes(player.id),
+    );
+
+    if (!player) {
+      throw new Error("No hay un jugador desconectado con ese nombre.");
+    }
+
+    const players = room.players.map((roomPlayer) =>
+      roomPlayer.id === player.id ? { ...roomPlayer, socketId } : roomPlayer,
+    );
+
+    const disconnectedPlayerIds = room.disconnectedPlayerIds.filter(
+      (playerId) => playerId !== player.id,
+    );
+
+    const updatedRoom: Room = {
+      ...room,
+      players,
+      disconnectedPlayerIds,
+      paused: disconnectedPlayerIds.length > 0,
+    };
+
+    this.rooms.set(room.id, updatedRoom);
+
+    return updatedRoom;
+  }
 }
-
-resolveDrawStack(roomId: string, playerId: string): Room {
-  const room = this.rooms.get(roomId);
-
-  if (!room) {
-    throw new Error("La sala no existe.");
-  }
-
-  if (!room.started || !room.game) {
-    throw new Error("La partida no ha iniciado.");
-  }
-
-  if (room.game.status !== "playing") {
-    throw new Error("La partida no está en curso.");
-  }
-
-  const currentPlayer = room.game.players[room.game.currentPlayerIndex];
-
-  if (!currentPlayer) {
-    throw new Error("No hay jugador actual.");
-  }
-
-  if (currentPlayer.id !== playerId) {
-    throw new Error("No es el turno de este jugador.");
-  }
-
-  if (room.game.drawStack <= 0) {
-    throw new Error("No hay acumulación de robo activa.");
-  }
-
-  const updatedGame = drawCards({
-    game: room.game,
-    playerId,
-    amount: room.game.drawStack,
-    clearDrawStack: true,
-    advanceTurn: true,
-  });
-
-  const updatedRoom: Room = {
-    ...room,
-    game: updatedGame,
-  };
-
-  this.rooms.set(room.id, updatedRoom);
-
-  return updatedRoom;
-}
-
-playCard(
-  roomId: string,
-  playerId: string,
-  cardId: string,
-  chosenColor?: Exclude<CardColor, "wild">
-): Room {
-  const room = this.rooms.get(roomId);
-
-  if (!room) {
-    throw new Error("La sala no existe.");
-  }
-
-  if (!room.started || !room.game) {
-    throw new Error("La partida no ha iniciado.");
-  }
-
-  const updatedGame = playCardCore({
-    game: room.game,
-    playerId,
-    cardId,
-    chosenColor,
-  });
-
-  const updatedRoom: Room = {
-    ...room,
-    game: updatedGame,
-  };
-
-  this.rooms.set(room.id, updatedRoom);
-
-  return updatedRoom;
-}
-
-sayUno(roomId: string, playerId: string): Room {
-  const room = this.rooms.get(roomId);
-
-  if (!room) {
-    throw new Error("La sala no existe.");
-  }
-
-  if (!room.started || !room.game) {
-    throw new Error("La partida no ha iniciado.");
-  }
-
-  if (room.game.status !== "playing") {
-    throw new Error("La partida no está en curso.");
-  }
-
-  const player = room.game.players.find((player) => player.id === playerId);
-
-  if (!player) {
-    throw new Error("El jugador no existe en la partida.");
-  }
-
-  if (player.hand.length !== 2) {
-    throw new Error("Solo puedes decir UNO cuando tienes exactamente 2 cartas.");
-  }
-
-  const unoDeclaredPlayerIds = room.game.unoDeclaredPlayerIds.includes(playerId)
-    ? room.game.unoDeclaredPlayerIds
-    : [...room.game.unoDeclaredPlayerIds, playerId];
-
-  const updatedRoom: Room = {
-    ...room,
-    game: {
-      ...room.game,
-      unoDeclaredPlayerIds,
-      unoPenaltyPlayerIds: room.game.unoPenaltyPlayerIds.filter(
-        (penaltyPlayerId) => penaltyPlayerId !== playerId
-      ),
-    },
-  };
-
-  this.rooms.set(room.id, updatedRoom);
-
-  return updatedRoom;
-}
-
-challengeUno(
-  roomId: string,
-  challengerId: string,
-  targetPlayerId: string
-): Room {
-  const room = this.rooms.get(roomId);
-
-  if (!room) {
-    throw new Error("La sala no existe.");
-  }
-
-  if (!room.started || !room.game) {
-    throw new Error("La partida no ha iniciado.");
-  }
-
-  if (room.game.status !== "playing") {
-    throw new Error("La partida no está en curso.");
-  }
-
-  const challenger = room.game.players.find(
-    (player) => player.id === challengerId
-  );
-
-  if (!challenger) {
-    throw new Error("El jugador que reta no existe en la partida.");
-  }
-
-  const targetPlayer = room.game.players.find(
-    (player) => player.id === targetPlayerId
-  );
-
-  if (!targetPlayer) {
-    throw new Error("El jugador retado no existe en la partida.");
-  }
-
-  if (challengerId === targetPlayerId) {
-    throw new Error("No puedes retarte a ti mismo.");
-  }
-
-  if (targetPlayer.hand.length !== 1) {
-    throw new Error("Solo puedes retar a un jugador que tenga una carta.");
-  }
-
-  if (!room.game.unoPenaltyPlayerIds.includes(targetPlayerId)) {
-    throw new Error("Ese jugador no puede ser penalizado por UNO.");
-  }
-
-  const gameAfterPenalty = drawCards({
-    game: room.game,
-    playerId: targetPlayerId,
-    amount: 2,
-    clearDrawStack: false,
-    advanceTurn: false,
-  });
-
-  const updatedRoom: Room = {
-    ...room,
-    game: {
-      ...gameAfterPenalty,
-      unoDeclaredPlayerIds: gameAfterPenalty.unoDeclaredPlayerIds.filter(
-        (declaredPlayerId) => declaredPlayerId !== targetPlayerId
-      ),
-      unoPenaltyPlayerIds: gameAfterPenalty.unoPenaltyPlayerIds.filter(
-        (penaltyPlayerId) => penaltyPlayerId !== targetPlayerId
-      ),
-    },
-  };
-
-  this.rooms.set(room.id, updatedRoom);
-
-  return updatedRoom;
-}
-}
-
-
 
 export const roomManager = new RoomManager();

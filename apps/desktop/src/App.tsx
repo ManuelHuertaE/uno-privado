@@ -8,6 +8,7 @@ function App() {
   const [playerName, setPlayerName] = useState("");
   const [roomId, setRoomId] = useState("");
   const [game, setGame] = useState<any>(null);
+  const [room, setRoom] = useState<any>(null);
 
   useEffect(() => {
     socket.on("connect", () => {
@@ -16,11 +17,13 @@ function App() {
 
     socket.on("room:created", (room) => {
       console.log("Sala creada:", room);
+      setRoom(room);
       setRoomId(room.id);
     });
 
-    socket.on("room:updated", (room) => {
-      console.log("Sala actualizada:", room);
+    socket.on("room:updated", (updatedRoom) => {
+      console.log("Sala actualizada:", updatedRoom);
+      setRoom(updatedRoom);
     });
 
     socket.on("game:updated", (updatedGame) => {
@@ -44,12 +47,21 @@ function App() {
   const currentPlayer = game?.players?.[game.currentPlayerIndex];
   const topCard = game?.discardPile?.[game.discardPile.length - 1];
   const winner = game?.players?.find(
-  (player: any) => player.id === game.winnerId
-);
+    (player: any) => player.id === game.winnerId,
+  );
 
   return (
     <>
       <h1>UNO Socket Test</h1>
+
+      {room?.paused && (
+        <div>
+          <h2>⏸️ Partida pausada</h2>
+          <p>
+            Un jugador se desconectó. La partida continuará cuando se reconecte.
+          </p>
+        </div>
+      )}
 
       <input
         placeholder="Nombre"
@@ -94,6 +106,17 @@ function App() {
         Iniciar partida
       </button>
 
+      <button
+        onClick={() => {
+          socket.emit("room:reconnect", {
+            roomId,
+            playerName,
+          });
+        }}
+      >
+        Reconectar a sala
+      </button>
+
       {game && (
         <div>
           <h2>Partida</h2>
@@ -114,7 +137,7 @@ function App() {
 
           {game.drawStack > 0 ? (
             <button
-            disabled={game.status === "finished"}
+              disabled={game.status === "finished" || room?.paused}
               onClick={() => {
                 socket.emit("game:resolveDrawStack", {
                   roomId,
@@ -125,7 +148,7 @@ function App() {
             </button>
           ) : (
             <button
-              disabled={game.status === "finished"}
+              disabled={game.status === "finished" || room?.paused}
               onClick={() => {
                 socket.emit("game:drawForTurn", {
                   roomId,
@@ -138,7 +161,7 @@ function App() {
 
           {currentPlayer?.hand?.length === 2 && (
             <button
-              disabled={game.status === "finished"}
+              disabled={game.status === "finished" || room?.paused}
               onClick={() => {
                 socket.emit("game:sayUno", {
                   roomId,
@@ -160,7 +183,7 @@ function App() {
 
               {player.handCount === 1 && (
                 <button
-                  disabled={game.status === "finished"}
+                  disabled={game.status === "finished" || room?.paused}
                   onClick={() => {
                     socket.emit("game:challengeUno", {
                       roomId,

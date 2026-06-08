@@ -98,6 +98,41 @@ export function registerGameSocket(io: Server): void {
       }
     });
 
+    socket.on("room:reconnect", (payload: unknown) => {
+      try {
+        const roomId = readRequiredString(
+          readPayloadField(payload, "roomId"),
+          "roomId",
+        );
+
+        const playerName = readRequiredString(
+          readPayloadField(payload, "playerName"),
+          "playerName",
+        );
+
+        const updatedRoom = roomManager.reconnectPlayer(
+          roomId,
+          playerName,
+          socket.id,
+        );
+
+        console.log(
+          `[ROOM RECONNECT] ${playerName} se reconectó a la sala ${updatedRoom.id}`,
+        );
+
+        socket.join(updatedRoom.id);
+
+        io.to(updatedRoom.id).emit("room:updated", {
+          ...updatedRoom,
+          game: null,
+        });
+
+        emitPrivateGameState(io, updatedRoom.id);
+      } catch (error) {
+        emitGameError(socket, error);
+      }
+    });
+
     socket.on("game:start", (payload: unknown) => {
       try {
         const roomId = readRequiredString(
