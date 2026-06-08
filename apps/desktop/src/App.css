@@ -51,7 +51,8 @@
   font-weight: 650;
 }
 
-.field input {
+.field input,
+.field select {
   width: 100%;
   box-sizing: border-box;
   border: 1px solid #cbd5e1;
@@ -65,7 +66,8 @@
     box-shadow 0.15s ease;
 }
 
-.field input:focus {
+.field input:focus,
+.field select:focus {
   border-color: #2563eb;
   outline: none;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
@@ -177,6 +179,91 @@ button:disabled {
   font-size: 0.94rem;
 }
 
+.game-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: left;
+}
+
+.game-section h2,
+.game-section h3 {
+  margin: 0;
+  color: #111827;
+}
+
+.game-section h2 {
+  font-size: 1.2rem;
+}
+
+.game-section h3 {
+  margin-bottom: 8px;
+  font-size: 1rem;
+}
+
+.game-section p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 0.94rem;
+}
+
+.game-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.game-facts div {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #ffffff;
+}
+
+.game-facts dt {
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.game-facts dd {
+  margin: 2px 0 0;
+  color: #111827;
+  font-weight: 700;
+}
+
+.hand-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hand-actions button {
+  padding: 10px 12px;
+  background: #334155;
+}
+
+.hand-actions button:hover:not(:disabled) {
+  background: #475569;
+}
+
+.game-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.game-actions button {
+  flex: 1;
+}
+
+.empty-state {
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
 .player-list {
   display: flex;
   flex-direction: column;
@@ -214,5 +301,13 @@ button:disabled {
 
   .game-card {
     padding: 18px;
+  }
+
+  .game-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .game-actions {
+    flex-direction: column;
   }
 }

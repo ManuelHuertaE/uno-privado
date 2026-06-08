@@ -16,7 +16,11 @@ function readPayloadField(payload: unknown, fieldName: string): unknown {
   return (payload as Record<string, unknown>)[fieldName];
 }
 
-function emitPrivateGameState(io: Server, roomId: string): void {
+function emitPrivateGameState(
+  io: Server,
+  roomId: string,
+  eventName = "game:updated",
+): void {
   const room = roomManager.getRoom(roomId);
 
   if (!room?.game) {
@@ -40,7 +44,7 @@ function emitPrivateGameState(io: Server, roomId: string): void {
       })),
     };
 
-    socket.emit("game:updated", privateGame);
+    socket.emit(eventName, privateGame);
   }
 }
 
@@ -177,6 +181,7 @@ export function registerGameSocket(io: Server): void {
           ...updatedRoom,
           game: null,
         });
+        io.to(updatedRoom.id).emit("game:started", updatedRoom.game);
         emitPrivateGameState(io, updatedRoom.id);
       } catch (error) {
         emitGameError(socket, error);

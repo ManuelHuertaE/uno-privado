@@ -3,6 +3,36 @@ import type { FormEvent } from "react";
 import { io } from "socket.io-client";
 import "./App.css";
 
+type CardColor = "red" | "blue" | "green" | "yellow" | "wild";
+
+type Card = {
+  id: string;
+  color: CardColor;
+  value: string;
+};
+
+type GamePlayer = {
+  id: string;
+  name: string;
+  hand: Card[];
+  handCount?: number;
+};
+
+type GameState = {
+  id: string;
+  players: GamePlayer[];
+  drawPile: Card[];
+  discardPile: Card[];
+  currentPlayerIndex: number;
+  direction: 1 | -1;
+  currentColor: CardColor;
+  status: "waiting" | "playing" | "finished";
+  drawStack: number;
+  unoDeclaredPlayerIds: string[];
+  unoPenaltyPlayerIds: string[];
+  winnerId?: string;
+};
+
 type RoomPlayer = {
   id: string;
   name: string;
@@ -13,6 +43,7 @@ type Room = {
   id: string;
   hostId: string;
   players: RoomPlayer[];
+  started?: boolean;
 };
 
 type ServerError = {
@@ -21,11 +52,22 @@ type ServerError = {
 
 const socket = io("http://localhost:3000");
 
+function formatCard(card: Card | undefined): string {
+  if (!card) {
+    return "Sin carta";
+  }
+
+  return card.color === "wild" ? card.value : `${card.color} ${card.value}`;
+}
+
 function App() {
   const [playerName, setPlayerName] = useState("");
   const [roomId, setRoomId] = useState("");
   const [message, setMessage] = useState("");
   const [room, setRoom] = useState<Room | null>(null);
+  const [gameState, setGameState] = useState<GameState | null>(null);
+  const [selectedColor, setSelectedColor] =
+    useState<Exclude<CardColor, "wild">>("red");
 
   const trimmedPlayerName = playerName.trim();
   const trimmedRoomId = roomId.trim();
@@ -35,23 +77,41 @@ function App() {
     (player) => player.socketId === socket.id,
   );
   const isHost = Boolean(currentPlayer && currentPlayer.id === room?.hostId);
+  const canStartGame = Boolean(isHost && room && room.players.length >= 2);
+  const currentGamePlayer = gameState?.players[gameState.currentPlayerIndex];
+  const localGamePlayer = gameState?.players.find(
+    (player) => player.id === currentPlayer?.id,
+  );
+  const topDiscard = gameState?.discardPile.at(-1);
 
   useEffect(() => {
     const handleRoomCreated = (createdRoom: Room) => {
       setRoom(createdRoom);
       setRoomId(createdRoom.id);
+      setGameState(null);
       setMessage("");
     };
 
     const handleRoomJoined = (joinedRoom: Room) => {
       setRoom(joinedRoom);
       setRoomId(joinedRoom.id);
+      setGameState(null);
       setMessage("");
     };
 
     const handleRoomUpdated = (updatedRoom: Room) => {
       setRoom(updatedRoom);
       setRoomId(updatedRoom.id);
+      setMessage("");
+    };
+
+    const handleGameStarted = (startedGame: GameState) => {
+      setGameState(startedGame);
+      setMessage("");
+    };
+
+    const handleGameUpdated = (updatedGame: GameState) => {
+      setGameState(updatedGame);
       setMessage("");
     };
 
@@ -66,12 +126,16 @@ function App() {
     socket.on("room:created", handleRoomCreated);
     socket.on("room:joined", handleRoomJoined);
     socket.on("room:updated", handleRoomUpdated);
+    socket.on("game:started", handleGameStarted);
+    socket.on("game:updated", handleGameUpdated);
     socket.on("game:error", handleGameError);
 
     return () => {
       socket.off("room:created", handleRoomCreated);
       socket.off("room:joined", handleRoomJoined);
       socket.off("room:updated", handleRoomUpdated);
+      socket.off("game:started", handleGameStarted);
+      socket.off("game:updated", handleGameUpdated);
       socket.off("game:error", handleGameError);
     };
   }, []);
@@ -116,6 +180,38 @@ function App() {
     });
   };
 
+  const handlePlayCard = (card: Card) => {
+    if (!room) {
+      return;
+    }
+
+    console.log("TODO emit game:play-card", {
+      roomId: room.id,
+      cardId: card.id,
+      chosenColor: card.color === "wild" ? selectedColor : undefined,
+    });
+  };
+
+  const handleDrawCard = () => {
+    if (!room) {
+      return;
+    }
+
+    console.log("TODO emit game:draw-card", {
+      roomId: room.id,
+    });
+  };
+
+  const handleSayUno = () => {
+    if (!room) {
+      return;
+    }
+
+    console.log("TODO emit game:say-uno", {
+      roomId: room.id,
+    });
+  };
+
   return (
     <main className="app-shell">
       <section className="welcome-panel" aria-labelledby="app-title">
@@ -125,7 +221,97 @@ function App() {
         </header>
 
         <div className="game-card">
-          {room ? (
+          {room && gameState ? (
+            <section className="game-section" aria-labelledby="game-title">
+              <div className="room-code">
+                <span>Codigo de sala</span>
+                <strong>{room.id}</strong>
+              </div>
+
+              <div>
+                <h2 id="game-title">Partida</h2>
+                <p>Estado temporal de juego</p>
+              </div>
+
+              <dl className="game-facts">
+                <div>
+                  <dt>Jugador actual</dt>
+                  <dd>{currentGamePlayer?.name ?? "Sin jugador"}</dd>
+                </div>
+                <div>
+                  <dt>Direccion</dt>
+                  <dd>{gameState.direction === 1 ? "Horario" : "Antihorario"}</dd>
+                </div>
+                <div>
+                  <dt>Color actual</dt>
+                  <dd>{gameState.currentColor}</dd>
+                </div>
+                <div>
+                  <dt>Carta superior</dt>
+                  <dd>{formatCard(topDiscard)}</dd>
+                </div>
+              </dl>
+
+              <div>
+                <h3>Jugadores</h3>
+                <ul className="player-list">
+                  {gameState.players.map((player) => (
+                    <li key={player.id}>
+                      <span>{player.name}</span>
+                      <small>
+                        {player.handCount ?? player.hand.length} cartas
+                      </small>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <label className="field">
+                <span>Color para comodines</span>
+                <select
+                  value={selectedColor}
+                  onChange={(event) =>
+                    setSelectedColor(
+                      event.target.value as Exclude<CardColor, "wild">,
+                    )
+                  }
+                >
+                  <option value="red">red</option>
+                  <option value="blue">blue</option>
+                  <option value="green">green</option>
+                  <option value="yellow">yellow</option>
+                </select>
+              </label>
+
+              <div>
+                <h3>Tu mano</h3>
+                <div className="hand-actions">
+                  {localGamePlayer?.hand.length ? (
+                    localGamePlayer.hand.map((card) => (
+                      <button
+                        key={card.id}
+                        type="button"
+                        onClick={() => handlePlayCard(card)}
+                      >
+                        {formatCard(card)}
+                      </button>
+                    ))
+                  ) : (
+                    <p className="empty-state">No hay cartas para mostrar.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="game-actions">
+                <button type="button" onClick={handleDrawCard}>
+                  Robar carta
+                </button>
+                <button type="button" onClick={handleSayUno}>
+                  Decir UNO
+                </button>
+              </div>
+            </section>
+          ) : room ? (
             <section className="lobby-section" aria-labelledby="lobby-title">
               <div className="room-code">
                 <span>Codigo de sala</span>
@@ -151,6 +337,7 @@ function App() {
                   className="primary-button"
                   type="button"
                   onClick={handleStartGame}
+                  disabled={!canStartGame}
                 >
                   Iniciar partida
                 </button>
