@@ -462,6 +462,36 @@ export class RoomManager {
     return updatedRoom;
   }
 
+  backToLobby(roomId: string, playerId: string): Room {
+    const room = this.rooms.get(roomId);
+
+    if (!room) {
+      throw new Error("La sala no existe.");
+    }
+
+    if (!room.started || !room.game) {
+      throw new Error("La partida no ha iniciado.");
+    }
+
+    if (room.hostId !== playerId) {
+      throw new Error("Solo el anfitrion puede volver al lobby.");
+    }
+
+    if (room.game.status !== "finished") {
+      throw new Error("La partida todavia no ha finalizado.");
+    }
+
+    const updatedRoom: Room = {
+      ...room,
+      started: false,
+      game: null,
+    };
+
+    this.rooms.set(room.id, updatedRoom);
+
+    return updatedRoom;
+  }
+
   reconnectPlayer(roomId: string, playerName: string, socketId: string): Room {
     const room = this.rooms.get(roomId);
 

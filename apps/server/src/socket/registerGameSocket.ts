@@ -526,6 +526,43 @@ export function registerGameSocket(io: Server): void {
     socket.on("game:challenge-uno", handleChallengeUno);
     socket.on("game:challengeUno", handleChallengeUno);
 
+    socket.on("game:back-to-lobby", (payload: unknown) => {
+      try {
+        const roomId = readRequiredString(
+          readPayloadField(payload, "roomId"),
+          "roomId",
+        );
+
+        const room = roomManager.getRoom(roomId);
+
+        if (!room) {
+          throw new Error("La sala no existe.");
+        }
+
+        const player = room.players.find(
+          (player) => player.socketId === socket.id,
+        );
+
+        if (!player) {
+          throw new Error("No perteneces a esta sala.");
+        }
+
+        const updatedRoom = roomManager.backToLobby(roomId, player.id);
+
+        console.log(
+          `[BACK TO LOBBY] Sala ${updatedRoom.id} regreso al lobby por ${player.name}`,
+        );
+
+        io.to(updatedRoom.id).emit("room:updated", {
+          ...updatedRoom,
+          game: null,
+        });
+        io.to(updatedRoom.id).emit("game:returned-to-lobby");
+      } catch (error) {
+        emitGameError(socket, error);
+      }
+    });
+
     socket.on("disconnect", () => {
       console.log("Cliente desconectado:", socket.id);
 

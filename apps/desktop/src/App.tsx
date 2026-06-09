@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { io } from "socket.io-client";
+import { FinalGameScreen } from "./components/FinalGameScreen";
 import "./App.css";
 
 type CardColor = "red" | "blue" | "green" | "yellow" | "wild";
@@ -91,9 +92,6 @@ function App() {
     currentGamePlayer && currentGamePlayer.id === localGamePlayer?.id,
   );
   const isGameFinished = gameState?.status === "finished";
-  const winnerPlayer = gameState?.players.find(
-    (player) => player.id === gameState.winnerId,
-  );
   const canDrawCard = Boolean(
     gameState && !isGameFinished && isLocalTurn && gameState.drawStack === 0,
   );
@@ -145,6 +143,11 @@ function App() {
       setMessage("");
     };
 
+    const handleReturnedToLobby = () => {
+      setGameState(null);
+      setMessage("");
+    };
+
     const handleGameError = (error: ServerError | string) => {
       setMessage(
         typeof error === "string"
@@ -161,6 +164,7 @@ function App() {
     socket.on("game:started", handleGameStarted);
     socket.on("game:updated", handleGameUpdated);
     socket.on("game:finished", handleGameFinished);
+    socket.on("game:returned-to-lobby", handleReturnedToLobby);
     socket.on("game:error", handleGameError);
 
     if (socket.connected) {
@@ -176,6 +180,7 @@ function App() {
       socket.off("game:started", handleGameStarted);
       socket.off("game:updated", handleGameUpdated);
       socket.off("game:finished", handleGameFinished);
+      socket.off("game:returned-to-lobby", handleReturnedToLobby);
       socket.off("game:error", handleGameError);
     };
   }, []);
@@ -283,6 +288,17 @@ function App() {
     });
   };
 
+  const handleBackToLobby = () => {
+    if (!room || !isGameFinished) {
+      return;
+    }
+
+    setMessage("");
+    socket.emit("game:back-to-lobby", {
+      roomId: room.id,
+    });
+  };
+
   return (
     <main className="app-shell">
       <section className="welcome-panel" aria-labelledby="app-title">
@@ -293,6 +309,16 @@ function App() {
 
         <div className="game-card">
           {room && gameState ? (
+            isGameFinished ? (
+              <FinalGameScreen
+                roomId={room.id}
+                gameState={gameState}
+                roomPlayers={room.players}
+                localPlayerId={currentPlayer?.id}
+                canBackToLobby={isHost}
+                onBackToLobby={handleBackToLobby}
+              />
+            ) : (
             <section className="game-section" aria-labelledby="game-title">
               <div className="room-code">
                 <span>Codigo de sala</span>
@@ -323,28 +349,7 @@ function App() {
                 </div>
               </dl>
 
-              {isGameFinished && (
-                <section className="finished-panel" aria-labelledby="finished-title">
-                  <h2 id="finished-title">Partida finalizada</h2>
-                  <p>Ganador: {winnerPlayer?.name ?? "Sin ganador"}</p>
-                  <p>Codigo de sala: {room.id}</p>
-
-                  <h3>Jugadores</h3>
-                  <ul className="player-list">
-                    {gameState.players.map((player) => (
-                      <li key={player.id}>
-                        <span>
-                          {player.name}
-                          {player.id === gameState.winnerId ? " (ganador)" : ""}
-                        </span>
-                        <small>{getCardCount(player)} cartas</small>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              )}
-
-              {!isGameFinished && gameState.drawStack > 0 && (
+              {gameState.drawStack > 0 && (
                 <section
                   className="draw-stack-panel"
                   aria-labelledby="draw-stack-title"
@@ -368,88 +373,80 @@ function App() {
                 </section>
               )}
 
-              {!isGameFinished && (
-                <div>
-                  <h3>Jugadores</h3>
-                  <ul className="player-list">
-                    {gameState.players.map((player) => (
-                      <li key={player.id}>
-                        <span>{player.name}</span>
-                        <div className="player-meta">
-                          <small>{getCardCount(player)} cartas</small>
-                          {player.id !== localGamePlayer?.id && (
-                            <button
-                              type="button"
-                              onClick={() => handleChallengeUno(player.id)}
-                              disabled={isGameFinished}
-                            >
-                              Retar UNO
-                            </button>
-                          )}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              <div>
+                <h3>Jugadores</h3>
+                <ul className="player-list">
+                  {gameState.players.map((player) => (
+                    <li key={player.id}>
+                      <span>{player.name}</span>
+                      <div className="player-meta">
+                        <small>{getCardCount(player)} cartas</small>
+                        {player.id !== localGamePlayer?.id && (
+                          <button
+                            type="button"
+                            onClick={() => handleChallengeUno(player.id)}
+                          >
+                            Retar UNO
+                          </button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
 
-              {!isGameFinished && (
-                <label className="field">
-                  <span>Color para comodines</span>
-                  <select
-                    value={selectedColor}
-                    onChange={(event) =>
-                      setSelectedColor(event.target.value as PlayableColor | "")
-                    }
-                  >
-                    <option value="">Elegir color</option>
-                    <option value="red">red</option>
-                    <option value="blue">blue</option>
-                    <option value="green">green</option>
-                    <option value="yellow">yellow</option>
-                  </select>
-                </label>
-              )}
+              <label className="field">
+                <span>Color para comodines</span>
+                <select
+                  value={selectedColor}
+                  onChange={(event) =>
+                    setSelectedColor(event.target.value as PlayableColor | "")
+                  }
+                >
+                  <option value="">Elegir color</option>
+                  <option value="red">red</option>
+                  <option value="blue">blue</option>
+                  <option value="green">green</option>
+                  <option value="yellow">yellow</option>
+                </select>
+              </label>
 
-              {!isGameFinished && (
-                <div>
-                  <h3>Tu mano</h3>
-                  <div className="hand-actions">
-                    {localGamePlayer?.hand.length ? (
-                      localGamePlayer.hand.map((card) => (
-                        <button
-                          key={card.id}
-                          type="button"
-                          onClick={() => handlePlayCard(card)}
-                          disabled={!isLocalTurn || isGameFinished}
-                        >
-                          {formatCard(card)}
-                        </button>
-                      ))
-                    ) : (
-                      <p className="empty-state">No hay cartas para mostrar.</p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {!isGameFinished && (
-                <div className="game-actions">
-                  {gameState.drawStack === 0 && (
-                    <button
-                      type="button"
-                      onClick={handleDrawCard}
-                      disabled={!canDrawCard}
-                    >
-                      Robar carta
-                    </button>
+              <div>
+                <h3>Tu mano</h3>
+                <div className="hand-actions">
+                  {localGamePlayer?.hand.length ? (
+                    localGamePlayer.hand.map((card) => (
+                      <button
+                        key={card.id}
+                        type="button"
+                        onClick={() => handlePlayCard(card)}
+                        disabled={!isLocalTurn}
+                      >
+                        {formatCard(card)}
+                      </button>
+                    ))
+                  ) : (
+                    <p className="empty-state">No hay cartas para mostrar.</p>
                   )}
-                  <button type="button" onClick={handleSayUno}>
-                    Decir UNO
-                  </button>
                 </div>
-              )}
+              </div>
+
+              <div className="game-actions">
+                {gameState.drawStack === 0 && (
+                  <button
+                    type="button"
+                    onClick={handleDrawCard}
+                    disabled={!canDrawCard}
+                  >
+                    Robar carta
+                  </button>
+                )}
+                <button type="button" onClick={handleSayUno}>
+                  Decir UNO
+                </button>
+              </div>
             </section>
+            )
           ) : room ? (
             <section className="lobby-section" aria-labelledby="lobby-title">
               <div className="room-code">
