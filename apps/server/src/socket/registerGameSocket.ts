@@ -235,6 +235,78 @@ export function registerGameSocket(io: Server): void {
       }
     });
 
+    socket.on("game:pause", (payload: unknown) => {
+      try {
+        const roomId = readRequiredString(
+          readPayloadField(payload, "roomId"),
+          "roomId",
+        );
+
+        const room = roomManager.getRoom(roomId);
+
+        if (!room) {
+          throw new Error("La sala no existe.");
+        }
+
+        const player = room.players.find(
+          (player) => player.socketId === socket.id,
+        );
+
+        if (!player) {
+          throw new Error("No perteneces a esta sala.");
+        }
+
+        const updatedRoom = roomManager.pauseGame(roomId, player.id);
+
+        io.to(updatedRoom.id).emit("room:updated", {
+          ...updatedRoom,
+          game: null,
+        });
+        io.to(updatedRoom.id).emit("game:paused", {
+          roomId: updatedRoom.id,
+          reason: updatedRoom.pauseReason,
+          pauseType: updatedRoom.pauseType,
+        });
+      } catch (error) {
+        emitGameError(socket, error);
+      }
+    });
+
+    socket.on("game:resume", (payload: unknown) => {
+      try {
+        const roomId = readRequiredString(
+          readPayloadField(payload, "roomId"),
+          "roomId",
+        );
+
+        const room = roomManager.getRoom(roomId);
+
+        if (!room) {
+          throw new Error("La sala no existe.");
+        }
+
+        const player = room.players.find(
+          (player) => player.socketId === socket.id,
+        );
+
+        if (!player) {
+          throw new Error("No perteneces a esta sala.");
+        }
+
+        const updatedRoom = roomManager.resumeGame(roomId, player.id);
+
+        io.to(updatedRoom.id).emit("room:updated", {
+          ...updatedRoom,
+          game: null,
+        });
+        io.to(updatedRoom.id).emit("game:resumed", {
+          roomId: updatedRoom.id,
+        });
+      } catch (error) {
+        emitGameError(socket, error);
+      }
+    });
+
     const handlePlayCard = (payload: unknown) => {
       try {
         const { roomId, cardId, chosenColor } = readPlayCardPayload(payload);
@@ -584,6 +656,14 @@ export function registerGameSocket(io: Server): void {
           ...updatedRoom,
           game: null,
         });
+
+        if (updatedRoom.paused) {
+          io.to(updatedRoom.id).emit("game:paused", {
+            roomId: updatedRoom.id,
+            reason: updatedRoom.pauseReason,
+            pauseType: updatedRoom.pauseType,
+          });
+        }
       }
     });
   });

@@ -57,6 +57,8 @@ export class RoomManager {
       started: false,
       game: null,
       paused: false,
+      pauseReason: undefined,
+      pauseType: undefined,
       disconnectedPlayerIds: [],
     };
 
@@ -73,7 +75,7 @@ export class RoomManager {
     }
 
     if (room.paused) {
-      throw new Error("La sala esta pausada por desconexión de un jugador.");
+      throw new Error("La partida está pausada.");
     }
 
     if (room.started) {
@@ -120,6 +122,8 @@ export class RoomManager {
         const updatedRoom: Room = {
           ...room,
           paused: true,
+          pauseReason: "Jugador desconectado",
+          pauseType: "disconnect",
           disconnectedPlayerIds,
         };
 
@@ -160,7 +164,7 @@ export class RoomManager {
     }
 
     if (room.paused) {
-      throw new Error("La sala esta pausada por desconexión de un jugador.");
+      throw new Error("La partida está pausada.");
     }
 
     if (room.started) {
@@ -186,6 +190,10 @@ export class RoomManager {
       ...room,
       started: true,
       game,
+      paused: false,
+      pauseReason: undefined,
+      pauseType: undefined,
+      disconnectedPlayerIds: [],
     };
 
     this.rooms.set(room.id, updatedRoom);
@@ -201,7 +209,7 @@ export class RoomManager {
     }
 
     if (room.paused) {
-      throw new Error("La sala esta pausada por desconexión de un jugador.");
+      throw new Error("La partida está pausada.");
     }
 
     if (!room.started || !room.game) {
@@ -251,7 +259,7 @@ export class RoomManager {
     }
 
     if (room.paused) {
-      throw new Error("La sala esta pausada por desconexión de un jugador.");
+      throw new Error("La partida está pausada.");
     }
 
     if (!room.started || !room.game) {
@@ -304,7 +312,7 @@ export class RoomManager {
     }
 
     if (room.paused) {
-      throw new Error("La sala esta pausada por desconexión de un jugador.");
+      throw new Error("La partida está pausada.");
     }
 
     if (!room.started || !room.game) {
@@ -340,7 +348,7 @@ export class RoomManager {
     }
 
     if (room.paused) {
-      throw new Error("La sala esta pausada por desconexión de un jugador.");
+      throw new Error("La partida está pausada.");
     }
 
     if (!room.started || !room.game) {
@@ -397,7 +405,7 @@ export class RoomManager {
     }
 
     if (room.paused) {
-      throw new Error("La sala esta pausada por desconexión de un jugador.");
+      throw new Error("La partida está pausada.");
     }
 
     if (!room.started || !room.game) {
@@ -485,6 +493,86 @@ export class RoomManager {
       ...room,
       started: false,
       game: null,
+      paused: false,
+      pauseReason: undefined,
+      pauseType: undefined,
+      disconnectedPlayerIds: [],
+    };
+
+    this.rooms.set(room.id, updatedRoom);
+
+    return updatedRoom;
+  }
+
+  pauseGame(roomId: string, playerId: string): Room {
+    const room = this.rooms.get(roomId);
+
+    if (!room) {
+      throw new Error("La sala no existe.");
+    }
+
+    if (!room.started || !room.game) {
+      throw new Error("La partida no ha iniciado.");
+    }
+
+    if (room.game.status === "finished") {
+      throw new Error("La partida ya finalizó.");
+    }
+
+    if (room.hostId !== playerId) {
+      throw new Error("Solo el anfitrión puede pausar la partida.");
+    }
+
+    if (room.paused) {
+      throw new Error("La partida ya está pausada.");
+    }
+
+    const updatedRoom: Room = {
+      ...room,
+      paused: true,
+      pauseReason: "Pausada por el anfitrión",
+      pauseType: "manual",
+    };
+
+    this.rooms.set(room.id, updatedRoom);
+
+    return updatedRoom;
+  }
+
+  resumeGame(roomId: string, playerId: string): Room {
+    const room = this.rooms.get(roomId);
+
+    if (!room) {
+      throw new Error("La sala no existe.");
+    }
+
+    if (!room.started || !room.game) {
+      throw new Error("La partida no ha iniciado.");
+    }
+
+    if (room.game.status === "finished") {
+      throw new Error("La partida ya finalizó.");
+    }
+
+    if (room.hostId !== playerId) {
+      throw new Error("Solo el anfitrión puede reanudar la partida.");
+    }
+
+    if (!room.paused) {
+      throw new Error("La partida no está pausada.");
+    }
+
+    if (room.disconnectedPlayerIds.length > 0 || room.pauseType === "disconnect") {
+      throw new Error(
+        "La partida no puede reanudarse hasta que todos los jugadores estén conectados.",
+      );
+    }
+
+    const updatedRoom: Room = {
+      ...room,
+      paused: false,
+      pauseReason: undefined,
+      pauseType: undefined,
     };
 
     this.rooms.set(room.id, updatedRoom);
@@ -540,6 +628,9 @@ export class RoomManager {
       players,
       disconnectedPlayerIds,
       paused: disconnectedPlayerIds.length > 0,
+      pauseReason:
+        disconnectedPlayerIds.length > 0 ? "Jugador desconectado" : undefined,
+      pauseType: disconnectedPlayerIds.length > 0 ? "disconnect" : undefined,
     };
 
     this.rooms.set(room.id, updatedRoom);

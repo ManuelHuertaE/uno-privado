@@ -47,11 +47,19 @@ type Room = {
   players: RoomPlayer[];
   started?: boolean;
   paused?: boolean;
+  pauseReason?: string;
+  pauseType?: "manual" | "disconnect";
   disconnectedPlayerIds?: string[];
 };
 
 type ServerError = {
   message?: string;
+};
+
+type PauseEvent = {
+  roomId?: string;
+  reason?: string;
+  pauseType?: "manual" | "disconnect";
 };
 
 const socket = io("http://localhost:3000");
@@ -89,6 +97,17 @@ function App() {
   const isHost = Boolean(currentPlayer && currentPlayer.id === room?.hostId);
   const canStartGame = Boolean(isHost && room && room.players.length >= 2);
   const isRoomPaused = Boolean(room?.paused);
+  const disconnectedPlayerIds = room?.disconnectedPlayerIds ?? [];
+  const disconnectedPlayers =
+    room?.players.filter((player) =>
+      disconnectedPlayerIds.includes(player.id),
+    ) ?? [];
+  const canResumeGame = isRoomPaused && disconnectedPlayerIds.length === 0;
+  const pauseReason =
+    room?.pauseReason ??
+    (room?.pauseType === "disconnect"
+      ? "Esperando reconexión de jugadores"
+      : "Pausada por el anfitrión");
   const currentGamePlayer = gameState?.players[gameState.currentPlayerIndex];
   const localGamePlayer = gameState?.players.find(
     (player) => player.id === currentPlayer?.id,
@@ -168,7 +187,36 @@ function App() {
       setMessage("");
     };
 
-    const handleGameResumed = () => {
+    const handleGamePaused = (event: PauseEvent | undefined) => {
+      setRoom((currentRoom) => {
+        if (!currentRoom || (event?.roomId && event.roomId !== currentRoom.id)) {
+          return currentRoom;
+        }
+
+        return {
+          ...currentRoom,
+          paused: true,
+          pauseReason: event?.reason ?? currentRoom.pauseReason,
+          pauseType: event?.pauseType ?? currentRoom.pauseType,
+        };
+      });
+      setIsReconnecting(false);
+      setMessage("");
+    };
+
+    const handleGameResumed = (event: { roomId?: string } | undefined) => {
+      setRoom((currentRoom) => {
+        if (!currentRoom || (event?.roomId && event.roomId !== currentRoom.id)) {
+          return currentRoom;
+        }
+
+        return {
+          ...currentRoom,
+          paused: false,
+          pauseReason: undefined,
+          pauseType: undefined,
+        };
+      });
       setIsReconnecting(false);
       setMessage("");
     };
@@ -192,6 +240,7 @@ function App() {
     socket.on("game:updated", handleGameUpdated);
     socket.on("game:finished", handleGameFinished);
     socket.on("game:returned-to-lobby", handleReturnedToLobby);
+    socket.on("game:paused", handleGamePaused);
     socket.on("game:resumed", handleGameResumed);
     socket.on("game:error", handleGameError);
     socket.on("room:error", handleGameError);
@@ -211,6 +260,7 @@ function App() {
       socket.off("game:updated", handleGameUpdated);
       socket.off("game:finished", handleGameFinished);
       socket.off("game:returned-to-lobby", handleReturnedToLobby);
+      socket.off("game:paused", handleGamePaused);
       socket.off("game:resumed", handleGameResumed);
       socket.off("game:error", handleGameError);
       socket.off("room:error", handleGameError);
@@ -267,6 +317,28 @@ function App() {
     }
 
     socket.emit("game:start", {
+      roomId: room.id,
+    });
+  };
+
+  const handlePauseGame = () => {
+    if (!room || !isHost || isRoomPaused || isGameFinished) {
+      return;
+    }
+
+    setMessage("");
+    socket.emit("game:pause", {
+      roomId: room.id,
+    });
+  };
+
+  const handleResumeGame = () => {
+    if (!room || !isHost || !isRoomPaused || !canResumeGame || isGameFinished) {
+      return;
+    }
+
+    setMessage("");
+    socket.emit("game:resume", {
       roomId: room.id,
     });
   };
@@ -382,6 +454,24 @@ function App() {
                 <p>Estado temporal de juego</p>
               </div>
 
+              {isHost && (
+                <div className="pause-actions">
+                  {isRoomPaused ? (
+                    <button
+                      type="button"
+                      onClick={handleResumeGame}
+                      disabled={!canResumeGame}
+                    >
+                      Reanudar partida
+                    </button>
+                  ) : (
+                    <button type="button" onClick={handlePauseGame}>
+                      Pausar partida
+                    </button>
+                  )}
+                </div>
+              )}
+
               <dl className="game-facts">
                 <div>
                   <dt>Jugador actual</dt>
@@ -404,9 +494,26 @@ function App() {
               {isRoomPaused && (
                 <section className="pause-panel" aria-labelledby="pause-title">
                   <h3 id="pause-title">Partida pausada</h3>
-                  <p>
-                    Esperando a que los jugadores desconectados se reconecten.
-                  </p>
+                  <p>{pauseReason}</p>
+                  {disconnectedPlayers.length > 0 && (
+                    <div className="disconnected-players">
+                      <span>Jugadores desconectados</span>
+                      <ul>
+                        {disconnectedPlayers.map((player) => (
+                          <li key={player.id}>{player.name}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {!isHost && (
+                    <p>Esperando a que el anfitrión reanude la partida.</p>
+                  )}
+                  {isHost && !canResumeGame && (
+                    <p>
+                      La partida no puede reanudarse hasta que todos los
+                      jugadores estén conectados.
+                    </p>
+                  )}
                 </section>
               )}
 

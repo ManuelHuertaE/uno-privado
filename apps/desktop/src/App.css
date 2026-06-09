@@ -263,6 +263,19 @@ button:disabled {
   font-weight: 700;
 }
 
+.pause-actions {
+  display: flex;
+}
+
+.pause-actions button {
+  width: 100%;
+  background: #334155;
+}
+
+.pause-actions button:hover:not(:disabled) {
+  background: #475569;
+}
+
 .draw-stack-panel {
   display: flex;
   flex-direction: column;
@@ -305,6 +318,37 @@ button:disabled {
 .pause-panel p {
   margin: 0;
   color: #92400e;
+}
+
+.disconnected-players {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.disconnected-players span {
+  color: #78350f;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.disconnected-players ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.disconnected-players li {
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #92400e;
+  background: #fef3c7;
+  font-size: 0.82rem;
+  font-weight: 800;
 }
 
 .hand-actions {

@@ -13,5 +13,7 @@ export type Room = {
   started: boolean;
   game: GameState | null;
   paused: boolean;
+  pauseReason?: string;
+  pauseType?: "manual" | "disconnect";
   disconnectedPlayerIds: string[];
 };
