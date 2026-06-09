@@ -485,6 +485,53 @@ button:disabled {
   background: #b91c1c;
 }
 
+.table-action-buttons .draw-action-button {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  min-width: 150px;
+  min-height: 52px;
+  border: 2px solid rgba(254, 240, 138, 0.86);
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #facc15, #f97316);
+  color: #111827;
+  box-shadow:
+    0 0 0 3px rgba(250, 204, 21, 0.16),
+    0 12px 24px rgba(0, 0, 0, 0.24);
+}
+
+.table-action-buttons .draw-action-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #fde047, #fb923c);
+  transform: translateY(-2px);
+}
+
+.table-action-buttons .draw-action-button:disabled {
+  filter: grayscale(0.35);
+}
+
+.draw-action-button span {
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.draw-action-button strong {
+  font-size: 0.95rem;
+  line-height: 1.1;
+}
+
+.table-action-buttons .draw-action-button.is-stack {
+  border-color: rgba(254, 202, 202, 0.9);
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  color: #ffffff;
+}
+
+.table-action-buttons .draw-action-button.is-stack:hover:not(:disabled) {
+  background: linear-gradient(135deg, #f87171, #dc2626);
+}
+
 .uno-table-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 280px;

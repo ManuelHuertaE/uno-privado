@@ -32,15 +32,23 @@ export function GameActions({
       <div className="table-action-buttons">
         {drawStack > 0 ? (
           <button
+            className="draw-action-button is-stack"
             type="button"
             onClick={onResolveDrawStack}
             disabled={!canResolveDrawStack || actionsDisabled}
           >
-            Robar +{drawStack}
+            <span>Robar cartas acumuladas</span>
+            <strong>Acumulado actual: +{drawStack}</strong>
           </button>
         ) : (
-          <button type="button" onClick={onDrawCard} disabled={!canDrawCard}>
-            Robar carta
+          <button
+            className="draw-action-button"
+            type="button"
+            onClick={onDrawCard}
+            disabled={!canDrawCard}
+          >
+            <span>Mazo</span>
+            <strong>Robar carta</strong>
           </button>
         )}
 
