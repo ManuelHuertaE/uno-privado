@@ -2,55 +2,16 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { io } from "socket.io-client";
 import { FinalGameScreen } from "./components/FinalGameScreen";
+import { GameTable } from "./components/GameTable";
+import type {
+  Card,
+  GameEvent,
+  GamePlayer,
+  GameState,
+  PlayableColor,
+  Room,
+} from "./components/gameTypes";
 import "./App.css";
-
-type CardColor = "red" | "blue" | "green" | "yellow" | "wild";
-type PlayableColor = Exclude<CardColor, "wild">;
-
-type Card = {
-  id: string;
-  color: CardColor;
-  value: string;
-};
-
-type GamePlayer = {
-  id: string;
-  name: string;
-  hand: Card[];
-  handCount?: number;
-};
-
-type GameState = {
-  id: string;
-  players: GamePlayer[];
-  drawPile: Card[];
-  discardPile: Card[];
-  currentPlayerIndex: number;
-  direction: 1 | -1;
-  currentColor: CardColor;
-  status: "waiting" | "playing" | "finished";
-  drawStack: number;
-  unoDeclaredPlayerIds: string[];
-  unoPenaltyPlayerIds: string[];
-  winnerId?: string;
-};
-
-type RoomPlayer = {
-  id: string;
-  name: string;
-  socketId?: string;
-};
-
-type Room = {
-  id: string;
-  hostId: string;
-  players: RoomPlayer[];
-  started?: boolean;
-  paused?: boolean;
-  pauseReason?: string;
-  pauseType?: "manual" | "disconnect";
-  disconnectedPlayerIds?: string[];
-};
 
 type ServerError = {
   message?: string;
@@ -62,32 +23,10 @@ type PauseEvent = {
   pauseType?: "manual" | "disconnect";
 };
 
-type GameEvent = {
-  id: string;
-  type: string;
-  message: string;
-  createdAt: string;
-};
-
 const socket = io("http://localhost:3000");
-
-function formatCard(card: Card | undefined): string {
-  if (!card) {
-    return "Sin carta";
-  }
-
-  return card.color === "wild" ? card.value : `${card.color} ${card.value}`;
-}
 
 function isWildCard(card: Card): boolean {
   return card.value === "wild" || card.value === "wildDraw4";
-}
-
-function formatEventTime(createdAt: string): string {
-  return new Intl.DateTimeFormat("es-MX", {
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(createdAt));
 }
 
 function App() {
@@ -97,9 +36,10 @@ function App() {
   const [room, setRoom] = useState<Room | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [socketId, setSocketId] = useState(socket.id);
-  const [selectedColor, setSelectedColor] = useState<PlayableColor | "">("");
+  const [pendingWildCard, setPendingWildCard] = useState<Card | null>(null);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [gameEvents, setGameEvents] = useState<GameEvent[]>([]);
+  const [unoAlert, setUnoAlert] = useState<GameEvent | null>(null);
 
   const trimmedPlayerName = playerName.trim();
   const trimmedRoomId = roomId.trim();
@@ -121,10 +61,10 @@ function App() {
   const pauseReason =
     room?.pauseReason ??
     (room?.pauseType === "disconnect"
-      ? "Esperando reconexión de jugadores"
-      : "Pausada por el anfitrión");
+      ? "Esperando reconexion de jugadores"
+      : "Pausada por el anfitrion");
   const currentGamePlayer = gameState?.players[gameState.currentPlayerIndex];
-  const localGamePlayer = gameState?.players.find(
+  const localGamePlayer: GamePlayer | undefined = gameState?.players.find(
     (player) => player.id === currentPlayer?.id,
   );
   const isLocalTurn = Boolean(
@@ -138,9 +78,6 @@ function App() {
       isLocalTurn &&
       gameState.drawStack === 0,
   );
-  const topDiscard = gameState?.discardPile.at(-1);
-  const getCardCount = (player: GamePlayer) =>
-    player.handCount ?? player.hand.length;
 
   useEffect(() => {
     const handleConnect = () => {
@@ -155,7 +92,9 @@ function App() {
       setRoom(createdRoom);
       setRoomId(createdRoom.id);
       setGameState(null);
+      setPendingWildCard(null);
       setGameEvents([]);
+      setUnoAlert(null);
       setIsReconnecting(false);
       setMessage("");
     };
@@ -164,7 +103,9 @@ function App() {
       setRoom(joinedRoom);
       setRoomId(joinedRoom.id);
       setGameState(null);
+      setPendingWildCard(null);
       setGameEvents([]);
+      setUnoAlert(null);
       setIsReconnecting(false);
       setMessage("");
     };
@@ -185,24 +126,31 @@ function App() {
 
     const handleGameStarted = (startedGame: GameState) => {
       setGameState(startedGame);
+      setPendingWildCard(null);
       setGameEvents([]);
+      setUnoAlert(null);
       setMessage("");
     };
 
     const handleGameUpdated = (updatedGame: GameState) => {
       setGameState(updatedGame);
+      setPendingWildCard(null);
       setIsReconnecting(false);
       setMessage("");
     };
 
     const handleGameFinished = (finishedGame: GameState) => {
       setGameState(finishedGame);
+      setPendingWildCard(null);
+      setUnoAlert(null);
       setMessage("");
     };
 
     const handleReturnedToLobby = () => {
       setGameState(null);
+      setPendingWildCard(null);
       setGameEvents([]);
+      setUnoAlert(null);
       setMessage("");
     };
 
@@ -250,9 +198,11 @@ function App() {
     };
 
     const handleGameEvent = (event: GameEvent) => {
-      setGameEvents((currentEvents) =>
-        [...currentEvents, event].slice(-30),
-      );
+      setGameEvents((currentEvents) => [...currentEvents, event].slice(-30));
+
+      if (event.type === "uno" && event.message.includes("dijo UNO")) {
+        setUnoAlert(event);
+      }
     };
 
     const handleGameEvents = (events: GameEvent[]) => {
@@ -299,6 +249,20 @@ function App() {
       socket.off("room:error", handleGameError);
     };
   }, []);
+
+  useEffect(() => {
+    if (!unoAlert) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setUnoAlert(null);
+    }, 2600);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [unoAlert]);
 
   const handleCreateRoom = () => {
     if (!canCreateRoom) {
@@ -381,8 +345,8 @@ function App() {
       return;
     }
 
-    if (isWildCard(card) && !selectedColor) {
-      setMessage("Elige un color antes de jugar un comodin.");
+    if (isWildCard(card)) {
+      setPendingWildCard(card);
       return;
     }
 
@@ -390,8 +354,21 @@ function App() {
     socket.emit("game:play-card", {
       roomId: room.id,
       cardId: card.id,
-      chosenColor: isWildCard(card) ? selectedColor : undefined,
     });
+  };
+
+  const handleChooseWildColor = (color: PlayableColor) => {
+    if (!room || !pendingWildCard || isGameFinished || isRoomPaused) {
+      return;
+    }
+
+    setMessage("");
+    socket.emit("game:play-card", {
+      roomId: room.id,
+      cardId: pendingWildCard.id,
+      chosenColor: color,
+    });
+    setPendingWildCard(null);
   };
 
   const handleDrawCard = () => {
@@ -457,14 +434,19 @@ function App() {
   };
 
   return (
-    <main className="app-shell">
-      <section className="welcome-panel" aria-labelledby="app-title">
-        <header className="welcome-header">
-          <h1 id="app-title">UNO Privado</h1>
-          <p>Crea una partida o unete a una sala existente</p>
-        </header>
+    <main className={room && gameState && !isGameFinished ? "game-app-shell" : "app-shell"}>
+      <section
+        className={room && gameState && !isGameFinished ? "game-view" : "welcome-panel"}
+        aria-labelledby="app-title"
+      >
+        {(!room || !gameState || isGameFinished) && (
+          <header className="welcome-header">
+            <h1 id="app-title">UNO Privado</h1>
+            <p>Crea una partida o unete a una sala existente</p>
+          </header>
+        )}
 
-        <div className="game-card">
+        <div className={room && gameState && !isGameFinished ? "game-table-card" : "game-card"}>
           {room && gameState ? (
             isGameFinished ? (
               <FinalGameScreen
@@ -476,200 +458,26 @@ function App() {
                 onBackToLobby={handleBackToLobby}
               />
             ) : (
-            <section className="game-section" aria-labelledby="game-title">
-              <div className="room-code">
-                <span>Codigo de sala</span>
-                <strong>{room.id}</strong>
-              </div>
-
-              <div>
-                <h2 id="game-title">Partida</h2>
-                <p>Estado temporal de juego</p>
-              </div>
-
-              {isHost && (
-                <div className="pause-actions">
-                  {isRoomPaused ? (
-                    <button
-                      type="button"
-                      onClick={handleResumeGame}
-                      disabled={!canResumeGame}
-                    >
-                      Reanudar partida
-                    </button>
-                  ) : (
-                    <button type="button" onClick={handlePauseGame}>
-                      Pausar partida
-                    </button>
-                  )}
-                </div>
-              )}
-
-              <dl className="game-facts">
-                <div>
-                  <dt>Jugador actual</dt>
-                  <dd>{currentGamePlayer?.name ?? "Sin jugador"}</dd>
-                </div>
-                <div>
-                  <dt>Direccion</dt>
-                  <dd>{gameState.direction === 1 ? "Horario" : "Antihorario"}</dd>
-                </div>
-                <div>
-                  <dt>Color actual</dt>
-                  <dd>{gameState.currentColor}</dd>
-                </div>
-                <div>
-                  <dt>Carta superior</dt>
-                  <dd>{formatCard(topDiscard)}</dd>
-                </div>
-              </dl>
-
-              {isRoomPaused && (
-                <section className="pause-panel" aria-labelledby="pause-title">
-                  <h3 id="pause-title">Partida pausada</h3>
-                  <p>{pauseReason}</p>
-                  {disconnectedPlayers.length > 0 && (
-                    <div className="disconnected-players">
-                      <span>Jugadores desconectados</span>
-                      <ul>
-                        {disconnectedPlayers.map((player) => (
-                          <li key={player.id}>{player.name}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {!isHost && (
-                    <p>Esperando a que el anfitrión reanude la partida.</p>
-                  )}
-                  {isHost && !canResumeGame && (
-                    <p>
-                      La partida no puede reanudarse hasta que todos los
-                      jugadores estén conectados.
-                    </p>
-                  )}
-                </section>
-              )}
-
-              {gameState.drawStack > 0 && (
-                <section
-                  className="draw-stack-panel"
-                  aria-labelledby="draw-stack-title"
-                >
-                  <h3 id="draw-stack-title">Robo acumulado</h3>
-                  {isLocalTurn ? (
-                    <>
-                      <p>
-                        Debes robar {gameState.drawStack} cartas o acumular con
-                        otra carta valida.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={handleResolveDrawStack}
-                        disabled={isRoomPaused}
-                      >
-                        Robar {gameState.drawStack} cartas
-                      </button>
-                    </>
-                  ) : (
-                    <p>
-                      Esperando a que el jugador actual responda al +2/+4.
-                    </p>
-                  )}
-                </section>
-              )}
-
-              <div>
-                <h3>Jugadores</h3>
-                <ul className="player-list">
-                  {gameState.players.map((player) => (
-                    <li key={player.id}>
-                      <span>{player.name}</span>
-                      <div className="player-meta">
-                        <small>{getCardCount(player)} cartas</small>
-                        {player.id !== localGamePlayer?.id && (
-                          <button
-                            type="button"
-                            onClick={() => handleChallengeUno(player.id)}
-                            disabled={isRoomPaused}
-                          >
-                            Retar UNO
-                          </button>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <label className="field">
-                <span>Color para comodines</span>
-                <select
-                  value={selectedColor}
-                  onChange={(event) =>
-                    setSelectedColor(event.target.value as PlayableColor | "")
-                  }
-                >
-                  <option value="">Elegir color</option>
-                  <option value="red">red</option>
-                  <option value="blue">blue</option>
-                  <option value="green">green</option>
-                  <option value="yellow">yellow</option>
-                </select>
-              </label>
-
-              <div>
-                <h3>Tu mano</h3>
-                <div className="hand-actions">
-                  {localGamePlayer?.hand.length ? (
-                    localGamePlayer.hand.map((card) => (
-                      <button
-                        key={card.id}
-                        type="button"
-                        onClick={() => handlePlayCard(card)}
-                        disabled={!isLocalTurn || isRoomPaused}
-                      >
-                        {formatCard(card)}
-                      </button>
-                    ))
-                  ) : (
-                    <p className="empty-state">No hay cartas para mostrar.</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="game-actions">
-                {gameState.drawStack === 0 && (
-                  <button
-                    type="button"
-                    onClick={handleDrawCard}
-                    disabled={!canDrawCard}
-                  >
-                    Robar carta
-                  </button>
-                )}
-                <button type="button" onClick={handleSayUno} disabled={isRoomPaused}>
-                  Decir UNO
-                </button>
-              </div>
-
-              <section className="event-history" aria-labelledby="events-title">
-                <h3 id="events-title">Eventos de la partida</h3>
-                {gameEvents.length > 0 ? (
-                  <ol>
-                    {gameEvents.map((event) => (
-                      <li key={event.id}>
-                        <time dateTime={event.createdAt}>
-                          {formatEventTime(event.createdAt)}
-                        </time>
-                        <span>{event.message}</span>
-                      </li>
-                    ))}
-                  </ol>
-                ) : (
-                  <p>No hay eventos todavia.</p>
-                )}
-              </section>
-            </section>
+              <GameTable
+                room={room}
+                gameState={gameState}
+                currentPlayer={currentPlayer}
+                localGamePlayer={localGamePlayer}
+                gameEvents={gameEvents}
+                isHost={isHost}
+                isRoomPaused={isRoomPaused}
+                canDrawCard={canDrawCard}
+                canResumeGame={canResumeGame}
+                pauseReason={pauseReason}
+                disconnectedPlayers={disconnectedPlayers}
+                onPlayCard={handlePlayCard}
+                onDrawCard={handleDrawCard}
+                onResolveDrawStack={handleResolveDrawStack}
+                onSayUno={handleSayUno}
+                onChallengeUno={handleChallengeUno}
+                onPauseGame={handlePauseGame}
+                onResumeGame={handleResumeGame}
+              />
             )
           ) : room ? (
             <section className="lobby-section" aria-labelledby="lobby-title">
@@ -777,6 +585,41 @@ function App() {
           )}
 
           {message && <p className="form-message">{message}</p>}
+          {unoAlert && room && gameState && !isGameFinished && (
+            <div className="uno-alert" role="status" aria-live="polite">
+              <strong>UNO!</strong>
+              <span>{unoAlert.message}</span>
+            </div>
+          )}
+          {pendingWildCard && room && gameState && !isGameFinished && (
+            <div className="wild-color-modal" role="dialog" aria-modal="true">
+              <div className="wild-color-dialog">
+                <h2>Elegir color</h2>
+                <p>Selecciona el color para jugar esta carta comodin.</p>
+                <div className="wild-color-options">
+                  {(["red", "blue", "green", "yellow"] as PlayableColor[]).map(
+                    (color) => (
+                      <button
+                        className={`wild-color-option wild-color-${color}`}
+                        key={color}
+                        type="button"
+                        onClick={() => handleChooseWildColor(color)}
+                      >
+                        {color}
+                      </button>
+                    ),
+                  )}
+                </div>
+                <button
+                  className="wild-color-cancel"
+                  type="button"
+                  onClick={() => setPendingWildCard(null)}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </section>
     </main>

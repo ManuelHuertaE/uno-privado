@@ -13,6 +13,10 @@ function createGameId(): string {
   return `game_${Math.random().toString(36).slice(2, 12)}`;
 }
 
+function canStartDiscard(value: string): boolean {
+  return value !== "wild" && value !== "wildDraw4";
+}
+
 export function createGame(params: CreateGameParams): GameState {
   const deck = shuffleDeck(createDeck());
 
@@ -33,7 +37,15 @@ export function createGame(params: CreateGameParams): GameState {
     }
   }
 
-  const firstDiscard = deck.shift();
+  const firstDiscardIndex = deck.findIndex((card) =>
+    canStartDiscard(card.value),
+  );
+
+  if (firstDiscardIndex === -1) {
+    throw new Error("No hay carta inicial valida para el descarte.");
+  }
+
+  const [firstDiscard] = deck.splice(firstDiscardIndex, 1);
 
   if (!firstDiscard) {
     throw new Error("No hay carta inicial para el descarte.");
