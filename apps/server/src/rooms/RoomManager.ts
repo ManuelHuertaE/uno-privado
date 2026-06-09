@@ -499,8 +499,22 @@ export class RoomManager {
       throw new Error("La sala no existe.");
     }
 
-    if (!room.started || !room.paused) {
-      throw new Error("La sala no está esperando reconexión.");
+    if (!room.started || !room.game) {
+      throw new Error("No hay una partida pausada para reconectar.");
+    }
+
+    if (!room.paused) {
+      throw new Error("No hay una partida pausada para reconectar.");
+    }
+
+    const connectedPlayerWithSameName = room.players.find(
+      (player) =>
+        player.name === playerName &&
+        !room.disconnectedPlayerIds.includes(player.id),
+    );
+
+    if (connectedPlayerWithSameName) {
+      throw new Error("Ese jugador ya está conectado.");
     }
 
     const player = room.players.find(
@@ -510,7 +524,7 @@ export class RoomManager {
     );
 
     if (!player) {
-      throw new Error("No hay un jugador desconectado con ese nombre.");
+      throw new Error("No se encontró un jugador desconectado con ese nombre.");
     }
 
     const players = room.players.map((roomPlayer) =>

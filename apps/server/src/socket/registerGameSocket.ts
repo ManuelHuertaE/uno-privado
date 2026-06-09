@@ -164,12 +164,21 @@ export function registerGameSocket(io: Server): void {
 
         socket.join(updatedRoom.id);
 
+        socket.emit("room:reconnected", {
+          ...updatedRoom,
+          game: null,
+        });
+
         io.to(updatedRoom.id).emit("room:updated", {
           ...updatedRoom,
           game: null,
         });
 
         emitPrivateGameState(io, updatedRoom.id);
+
+        if (!updatedRoom.paused) {
+          io.to(updatedRoom.id).emit("game:resumed");
+        }
       } catch (error) {
         emitGameError(socket, error);
       }

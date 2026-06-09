@@ -46,6 +46,8 @@ type Room = {
   hostId: string;
   players: RoomPlayer[];
   started?: boolean;
+  paused?: boolean;
+  disconnectedPlayerIds?: string[];
 };
 
 type ServerError = {
@@ -74,16 +76,19 @@ function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [socketId, setSocketId] = useState(socket.id);
   const [selectedColor, setSelectedColor] = useState<PlayableColor | "">("");
+  const [isReconnecting, setIsReconnecting] = useState(false);
 
   const trimmedPlayerName = playerName.trim();
   const trimmedRoomId = roomId.trim();
   const canCreateRoom = trimmedPlayerName.length > 0;
   const canJoinRoom = canCreateRoom && trimmedRoomId.length > 0;
+  const canReconnectRoom = canJoinRoom && !isReconnecting;
   const currentPlayer = room?.players.find(
     (player) => player.socketId === socketId,
   );
   const isHost = Boolean(currentPlayer && currentPlayer.id === room?.hostId);
   const canStartGame = Boolean(isHost && room && room.players.length >= 2);
+  const isRoomPaused = Boolean(room?.paused);
   const currentGamePlayer = gameState?.players[gameState.currentPlayerIndex];
   const localGamePlayer = gameState?.players.find(
     (player) => player.id === currentPlayer?.id,
@@ -93,7 +98,11 @@ function App() {
   );
   const isGameFinished = gameState?.status === "finished";
   const canDrawCard = Boolean(
-    gameState && !isGameFinished && isLocalTurn && gameState.drawStack === 0,
+    gameState &&
+      !isGameFinished &&
+      !isRoomPaused &&
+      isLocalTurn &&
+      gameState.drawStack === 0,
   );
   const topDiscard = gameState?.discardPile.at(-1);
   const getCardCount = (player: GamePlayer) =>
@@ -112,6 +121,7 @@ function App() {
       setRoom(createdRoom);
       setRoomId(createdRoom.id);
       setGameState(null);
+      setIsReconnecting(false);
       setMessage("");
     };
 
@@ -119,12 +129,21 @@ function App() {
       setRoom(joinedRoom);
       setRoomId(joinedRoom.id);
       setGameState(null);
+      setIsReconnecting(false);
       setMessage("");
     };
 
     const handleRoomUpdated = (updatedRoom: Room) => {
       setRoom(updatedRoom);
       setRoomId(updatedRoom.id);
+      setIsReconnecting(false);
+      setMessage("");
+    };
+
+    const handleRoomReconnected = (reconnectedRoom: Room) => {
+      setRoom(reconnectedRoom);
+      setRoomId(reconnectedRoom.id);
+      setIsReconnecting(false);
       setMessage("");
     };
 
@@ -135,6 +154,7 @@ function App() {
 
     const handleGameUpdated = (updatedGame: GameState) => {
       setGameState(updatedGame);
+      setIsReconnecting(false);
       setMessage("");
     };
 
@@ -148,7 +168,13 @@ function App() {
       setMessage("");
     };
 
+    const handleGameResumed = () => {
+      setIsReconnecting(false);
+      setMessage("");
+    };
+
     const handleGameError = (error: ServerError | string) => {
+      setIsReconnecting(false);
       setMessage(
         typeof error === "string"
           ? error
@@ -161,11 +187,14 @@ function App() {
     socket.on("room:created", handleRoomCreated);
     socket.on("room:joined", handleRoomJoined);
     socket.on("room:updated", handleRoomUpdated);
+    socket.on("room:reconnected", handleRoomReconnected);
     socket.on("game:started", handleGameStarted);
     socket.on("game:updated", handleGameUpdated);
     socket.on("game:finished", handleGameFinished);
     socket.on("game:returned-to-lobby", handleReturnedToLobby);
+    socket.on("game:resumed", handleGameResumed);
     socket.on("game:error", handleGameError);
+    socket.on("room:error", handleGameError);
 
     if (socket.connected) {
       setSocketId(socket.id);
@@ -177,11 +206,14 @@ function App() {
       socket.off("room:created", handleRoomCreated);
       socket.off("room:joined", handleRoomJoined);
       socket.off("room:updated", handleRoomUpdated);
+      socket.off("room:reconnected", handleRoomReconnected);
       socket.off("game:started", handleGameStarted);
       socket.off("game:updated", handleGameUpdated);
       socket.off("game:finished", handleGameFinished);
       socket.off("game:returned-to-lobby", handleReturnedToLobby);
+      socket.off("game:resumed", handleGameResumed);
       socket.off("game:error", handleGameError);
+      socket.off("room:error", handleGameError);
     };
   }, []);
 
@@ -210,6 +242,20 @@ function App() {
     });
   };
 
+  const handleReconnectRoom = () => {
+    if (!canJoinRoom) {
+      setMessage("Escribe tu nombre y el codigo de sala para reconectar.");
+      return;
+    }
+
+    setMessage("Reconectando...");
+    setIsReconnecting(true);
+    socket.emit("room:reconnect", {
+      playerName: trimmedPlayerName,
+      roomId: trimmedRoomId,
+    });
+  };
+
   const handleJoinSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     handleJoinRoom();
@@ -226,7 +272,7 @@ function App() {
   };
 
   const handlePlayCard = (card: Card) => {
-    if (!room || isGameFinished) {
+    if (!room || isGameFinished || isRoomPaused) {
       return;
     }
 
@@ -244,7 +290,7 @@ function App() {
   };
 
   const handleDrawCard = () => {
-    if (!room || isGameFinished || !canDrawCard) {
+    if (!room || isGameFinished || isRoomPaused || !canDrawCard) {
       return;
     }
 
@@ -255,7 +301,13 @@ function App() {
   };
 
   const handleResolveDrawStack = () => {
-    if (!room || !gameState || isGameFinished || gameState.drawStack <= 0) {
+    if (
+      !room ||
+      !gameState ||
+      isGameFinished ||
+      isRoomPaused ||
+      gameState.drawStack <= 0
+    ) {
       return;
     }
 
@@ -266,7 +318,7 @@ function App() {
   };
 
   const handleSayUno = () => {
-    if (!room || isGameFinished) {
+    if (!room || isGameFinished || isRoomPaused) {
       return;
     }
 
@@ -277,7 +329,7 @@ function App() {
   };
 
   const handleChallengeUno = (targetPlayerId: string) => {
-    if (!room || isGameFinished) {
+    if (!room || isGameFinished || isRoomPaused) {
       return;
     }
 
@@ -349,6 +401,15 @@ function App() {
                 </div>
               </dl>
 
+              {isRoomPaused && (
+                <section className="pause-panel" aria-labelledby="pause-title">
+                  <h3 id="pause-title">Partida pausada</h3>
+                  <p>
+                    Esperando a que los jugadores desconectados se reconecten.
+                  </p>
+                </section>
+              )}
+
               {gameState.drawStack > 0 && (
                 <section
                   className="draw-stack-panel"
@@ -361,7 +422,11 @@ function App() {
                         Debes robar {gameState.drawStack} cartas o acumular con
                         otra carta valida.
                       </p>
-                      <button type="button" onClick={handleResolveDrawStack}>
+                      <button
+                        type="button"
+                        onClick={handleResolveDrawStack}
+                        disabled={isRoomPaused}
+                      >
                         Robar {gameState.drawStack} cartas
                       </button>
                     </>
@@ -385,6 +450,7 @@ function App() {
                           <button
                             type="button"
                             onClick={() => handleChallengeUno(player.id)}
+                            disabled={isRoomPaused}
                           >
                             Retar UNO
                           </button>
@@ -420,7 +486,7 @@ function App() {
                         key={card.id}
                         type="button"
                         onClick={() => handlePlayCard(card)}
-                        disabled={!isLocalTurn}
+                        disabled={!isLocalTurn || isRoomPaused}
                       >
                         {formatCard(card)}
                       </button>
@@ -441,7 +507,7 @@ function App() {
                     Robar carta
                   </button>
                 )}
-                <button type="button" onClick={handleSayUno}>
+                <button type="button" onClick={handleSayUno} disabled={isRoomPaused}>
                   Decir UNO
                 </button>
               </div>
@@ -529,6 +595,26 @@ function App() {
                   Unirse a partida
                 </button>
               </form>
+
+              <section
+                className="reconnect-section"
+                aria-labelledby="reconnect-title"
+              >
+                <div>
+                  <h2 id="reconnect-title">¿Te desconectaste?</h2>
+                  <p>
+                    Usa esta opcion si perdiste conexion durante una partida.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleReconnectRoom}
+                  disabled={!canReconnectRoom}
+                >
+                  {isReconnecting ? "Reconectando..." : "Reconectar a partida"}
+                </button>
+              </section>
             </>
           )}
 
