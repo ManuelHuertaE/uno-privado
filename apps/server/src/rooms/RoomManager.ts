@@ -7,7 +7,9 @@ import {
   resolveDrawStack as resolveDrawStackCore,
 } from "@uno/game-core";
 import type { Room, RoomPlayer } from "./types";
-import type { CardColor } from "@uno/shared";
+import type { CardColor, GameEvent } from "@uno/shared";
+
+const MAX_GAME_EVENTS = 30;
 
 function createShortId(): string {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -23,6 +25,10 @@ function createPlayer(name: string, socketId: string): RoomPlayer {
     name,
     socketId,
   };
+}
+
+function createGameEventId(): string {
+  return `event_${Math.random().toString(36).slice(2, 12)}`;
 }
 
 export class RoomManager {
@@ -60,6 +66,7 @@ export class RoomManager {
       pauseReason: undefined,
       pauseType: undefined,
       disconnectedPlayerIds: [],
+      events: [],
     };
 
     this.rooms.set(room.id, room);
@@ -194,6 +201,7 @@ export class RoomManager {
       pauseReason: undefined,
       pauseType: undefined,
       disconnectedPlayerIds: [],
+      events: [],
     };
 
     this.rooms.set(room.id, updatedRoom);
@@ -497,6 +505,7 @@ export class RoomManager {
       pauseReason: undefined,
       pauseType: undefined,
       disconnectedPlayerIds: [],
+      events: [],
     };
 
     this.rooms.set(room.id, updatedRoom);
@@ -636,6 +645,30 @@ export class RoomManager {
     this.rooms.set(room.id, updatedRoom);
 
     return updatedRoom;
+  }
+
+  addGameEvent(roomId: string, type: string, message: string): GameEvent {
+    const room = this.rooms.get(roomId);
+
+    if (!room) {
+      throw new Error("La sala no existe.");
+    }
+
+    const event: GameEvent = {
+      id: createGameEventId(),
+      type,
+      message,
+      createdAt: new Date().toISOString(),
+    };
+
+    const updatedRoom: Room = {
+      ...room,
+      events: [...room.events, event].slice(-MAX_GAME_EVENTS),
+    };
+
+    this.rooms.set(room.id, updatedRoom);
+
+    return event;
   }
 }
 

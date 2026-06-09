@@ -375,6 +375,48 @@ button:disabled {
   flex: 1;
 }
 
+.event-history {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.event-history h3 {
+  margin: 0 0 10px;
+}
+
+.event-history ol {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.event-history li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: start;
+  color: #111827;
+  font-size: 0.9rem;
+}
+
+.event-history time {
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.event-history p {
+  margin: 0;
+  color: #64748b;
+}
+
 .empty-state {
   border: 1px dashed #cbd5e1;
   border-radius: 8px;

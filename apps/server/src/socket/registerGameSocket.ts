@@ -1,5 +1,5 @@
 import type { Server, Socket } from "socket.io";
-import type { CardColor } from "@uno/shared";
+import type { Card, CardColor } from "@uno/shared";
 import { roomManager } from "../rooms/RoomManager";
 
 type PlayCardPayload = {
@@ -84,6 +84,27 @@ function emitGameError(socket: Socket, error: unknown): void {
   socket.emit("game:error", {
     message: error instanceof Error ? error.message : "Error inesperado.",
   });
+}
+
+function formatCard(card: Card): string {
+  const value =
+    card.value === "draw2"
+      ? "+2"
+      : card.value === "wildDraw4"
+        ? "+4"
+        : card.value;
+
+  return card.color === "wild" ? value : `${card.color} ${value}`;
+}
+
+function emitGameEvent(
+  io: Server,
+  roomId: string,
+  type: string,
+  message: string,
+): void {
+  const event = roomManager.addGameEvent(roomId, type, message);
+  io.to(roomId).emit("game:event", event);
 }
 
 function assertGameIsActive(status: string): void {
@@ -175,9 +196,26 @@ export function registerGameSocket(io: Server): void {
         });
 
         emitPrivateGameState(io, updatedRoom.id);
+        emitGameEvent(
+          io,
+          updatedRoom.id,
+          "connection",
+          `${playerName} se reconectó.`,
+        );
+
+        const roomWithEvents = roomManager.getRoom(updatedRoom.id);
+        socket.emit("game:events", roomWithEvents?.events ?? []);
 
         if (!updatedRoom.paused) {
-          io.to(updatedRoom.id).emit("game:resumed");
+          io.to(updatedRoom.id).emit("game:resumed", {
+            roomId: updatedRoom.id,
+          });
+          emitGameEvent(
+            io,
+            updatedRoom.id,
+            "pause",
+            "La partida fue reanudada.",
+          );
         }
       } catch (error) {
         emitGameError(socket, error);
@@ -230,6 +268,7 @@ export function registerGameSocket(io: Server): void {
         });
         io.to(updatedRoom.id).emit("game:started", updatedRoom.game);
         emitPrivateGameState(io, updatedRoom.id);
+        emitGameEvent(io, updatedRoom.id, "game-started", "La partida ha iniciado.");
       } catch (error) {
         emitGameError(socket, error);
       }
@@ -267,6 +306,7 @@ export function registerGameSocket(io: Server): void {
           reason: updatedRoom.pauseReason,
           pauseType: updatedRoom.pauseType,
         });
+        emitGameEvent(io, updatedRoom.id, "pause", "La partida fue pausada.");
       } catch (error) {
         emitGameError(socket, error);
       }
@@ -302,6 +342,7 @@ export function registerGameSocket(io: Server): void {
         io.to(updatedRoom.id).emit("game:resumed", {
           roomId: updatedRoom.id,
         });
+        emitGameEvent(io, updatedRoom.id, "pause", "La partida fue reanudada.");
       } catch (error) {
         emitGameError(socket, error);
       }
@@ -335,6 +376,14 @@ export function registerGameSocket(io: Server): void {
           throw new Error("No perteneces a esta sala.");
         }
 
+        const cardToPlay = room.game.players
+          .find((gamePlayer) => gamePlayer.id === player.id)
+          ?.hand.find((card) => card.id === cardId);
+
+        if (!cardToPlay) {
+          throw new Error("El jugador no tiene esa carta.");
+        }
+
         const updatedRoom = roomManager.playCard(
           roomId,
           player.id,
@@ -364,6 +413,38 @@ export function registerGameSocket(io: Server): void {
         }
 
         emitPrivateGameState(io, updatedRoom.id);
+
+        if (cardToPlay.value === "draw2") {
+          emitGameEvent(
+            io,
+            updatedRoom.id,
+            "draw-stack",
+            `${player.name} jugó +2. El acumulado es de ${updatedRoom.game?.drawStack ?? 0} cartas.`,
+          );
+        } else if (cardToPlay.value === "wildDraw4") {
+          emitGameEvent(
+            io,
+            updatedRoom.id,
+            "draw-stack",
+            `${player.name} jugó +4. El acumulado es de ${updatedRoom.game?.drawStack ?? 0} cartas.`,
+          );
+        } else {
+          emitGameEvent(
+            io,
+            updatedRoom.id,
+            "card-played",
+            `${player.name} jugó ${formatCard(cardToPlay)}.`,
+          );
+        }
+
+        if (updatedRoom.game?.status === "finished") {
+          emitGameEvent(
+            io,
+            updatedRoom.id,
+            "game-finished",
+            `${player.name} ganó la partida.`,
+          );
+        }
       } catch (error) {
         emitGameError(socket, error);
       }
@@ -431,6 +512,12 @@ export function registerGameSocket(io: Server): void {
         });
 
         emitPrivateGameState(io, updatedRoom.id);
+        emitGameEvent(
+          io,
+          updatedRoom.id,
+          "card-drawn",
+          `${player.name} robó una carta.`,
+        );
       } catch (error) {
         emitGameError(socket, error);
       }
@@ -484,6 +571,7 @@ export function registerGameSocket(io: Server): void {
           throw new Error("No hay acumulacion de robo activa.");
         }
 
+        const drawStackAmount = room.game.drawStack;
         const updatedRoom = roomManager.resolveDrawStack(roomId, player.id);
 
         console.log(
@@ -496,6 +584,12 @@ export function registerGameSocket(io: Server): void {
         });
 
         emitPrivateGameState(io, updatedRoom.id);
+        emitGameEvent(
+          io,
+          updatedRoom.id,
+          "draw-stack",
+          `${player.name} robó ${drawStackAmount} cartas acumuladas.`,
+        );
       } catch (error) {
         emitGameError(socket, error);
       }
@@ -543,6 +637,7 @@ export function registerGameSocket(io: Server): void {
         });
 
         emitPrivateGameState(io, updatedRoom.id);
+        emitGameEvent(io, updatedRoom.id, "uno", `${player.name} dijo UNO.`);
       } catch (error) {
         emitGameError(socket, error);
       }
@@ -552,6 +647,8 @@ export function registerGameSocket(io: Server): void {
     socket.on("game:sayUno", handleSayUno);
 
     const handleChallengeUno = (payload: unknown) => {
+      let failedChallengeRoomId: string | undefined;
+
       try {
         const roomId = readRequiredString(
           readPayloadField(payload, "roomId"),
@@ -583,6 +680,11 @@ export function registerGameSocket(io: Server): void {
           throw new Error("No perteneces a esta sala.");
         }
 
+        failedChallengeRoomId = roomId;
+        const targetPlayerName =
+          room.game.players.find((player) => player.id === targetPlayerId)
+            ?.name ?? targetPlayerId;
+
         const updatedRoom = roomManager.challengeUno(
           roomId,
           challenger.id,
@@ -599,7 +701,21 @@ export function registerGameSocket(io: Server): void {
         });
 
         emitPrivateGameState(io, updatedRoom.id);
+        emitGameEvent(
+          io,
+          updatedRoom.id,
+          "uno",
+          `${targetPlayerName} fue penalizado por no decir UNO.`,
+        );
       } catch (error) {
+        if (failedChallengeRoomId) {
+          emitGameEvent(
+            io,
+            failedChallengeRoomId,
+            "uno",
+            "El reto UNO no procedió.",
+          );
+        }
         emitGameError(socket, error);
       }
     };
@@ -652,6 +768,10 @@ export function registerGameSocket(io: Server): void {
       console.log("Sala después de desconectar:", updatedRoom);
 
       if (updatedRoom) {
+        const disconnectedPlayer = updatedRoom.players.find(
+          (player) => player.socketId === socket.id,
+        );
+
         io.to(updatedRoom.id).emit("room:updated", {
           ...updatedRoom,
           game: null,
@@ -663,6 +783,15 @@ export function registerGameSocket(io: Server): void {
             reason: updatedRoom.pauseReason,
             pauseType: updatedRoom.pauseType,
           });
+        }
+
+        if (disconnectedPlayer && updatedRoom.started) {
+          emitGameEvent(
+            io,
+            updatedRoom.id,
+            "connection",
+            `${disconnectedPlayer.name} se desconectó. La partida fue pausada.`,
+          );
         }
       }
     });

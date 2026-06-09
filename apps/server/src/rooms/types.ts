@@ -1,4 +1,4 @@
-import type { GameState } from "@uno/shared";
+import type { GameEvent, GameState } from "@uno/shared";
 
 export type RoomPlayer = {
   id: string;
@@ -16,4 +16,5 @@ export type Room = {
   pauseReason?: string;
   pauseType?: "manual" | "disconnect";
   disconnectedPlayerIds: string[];
+  events: GameEvent[];
 };

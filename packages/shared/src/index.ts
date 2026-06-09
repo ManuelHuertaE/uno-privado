@@ -29,6 +29,13 @@ export interface Player {
   hand: Card[];
 }
 
+export interface GameEvent {
+  id: string;
+  type: string;
+  message: string;
+  createdAt: string;
+}
+
 export interface GameState {
   id: string;
   players: Player[];

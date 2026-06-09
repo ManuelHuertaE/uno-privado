@@ -62,6 +62,13 @@ type PauseEvent = {
   pauseType?: "manual" | "disconnect";
 };
 
+type GameEvent = {
+  id: string;
+  type: string;
+  message: string;
+  createdAt: string;
+};
+
 const socket = io("http://localhost:3000");
 
 function formatCard(card: Card | undefined): string {
@@ -76,6 +83,13 @@ function isWildCard(card: Card): boolean {
   return card.value === "wild" || card.value === "wildDraw4";
 }
 
+function formatEventTime(createdAt: string): string {
+  return new Intl.DateTimeFormat("es-MX", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(createdAt));
+}
+
 function App() {
   const [playerName, setPlayerName] = useState("");
   const [roomId, setRoomId] = useState("");
@@ -85,6 +99,7 @@ function App() {
   const [socketId, setSocketId] = useState(socket.id);
   const [selectedColor, setSelectedColor] = useState<PlayableColor | "">("");
   const [isReconnecting, setIsReconnecting] = useState(false);
+  const [gameEvents, setGameEvents] = useState<GameEvent[]>([]);
 
   const trimmedPlayerName = playerName.trim();
   const trimmedRoomId = roomId.trim();
@@ -140,6 +155,7 @@ function App() {
       setRoom(createdRoom);
       setRoomId(createdRoom.id);
       setGameState(null);
+      setGameEvents([]);
       setIsReconnecting(false);
       setMessage("");
     };
@@ -148,6 +164,7 @@ function App() {
       setRoom(joinedRoom);
       setRoomId(joinedRoom.id);
       setGameState(null);
+      setGameEvents([]);
       setIsReconnecting(false);
       setMessage("");
     };
@@ -168,6 +185,7 @@ function App() {
 
     const handleGameStarted = (startedGame: GameState) => {
       setGameState(startedGame);
+      setGameEvents([]);
       setMessage("");
     };
 
@@ -184,6 +202,7 @@ function App() {
 
     const handleReturnedToLobby = () => {
       setGameState(null);
+      setGameEvents([]);
       setMessage("");
     };
 
@@ -230,6 +249,16 @@ function App() {
       );
     };
 
+    const handleGameEvent = (event: GameEvent) => {
+      setGameEvents((currentEvents) =>
+        [...currentEvents, event].slice(-30),
+      );
+    };
+
+    const handleGameEvents = (events: GameEvent[]) => {
+      setGameEvents(events.slice(-30));
+    };
+
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
     socket.on("room:created", handleRoomCreated);
@@ -242,6 +271,8 @@ function App() {
     socket.on("game:returned-to-lobby", handleReturnedToLobby);
     socket.on("game:paused", handleGamePaused);
     socket.on("game:resumed", handleGameResumed);
+    socket.on("game:event", handleGameEvent);
+    socket.on("game:events", handleGameEvents);
     socket.on("game:error", handleGameError);
     socket.on("room:error", handleGameError);
 
@@ -262,6 +293,8 @@ function App() {
       socket.off("game:returned-to-lobby", handleReturnedToLobby);
       socket.off("game:paused", handleGamePaused);
       socket.off("game:resumed", handleGameResumed);
+      socket.off("game:event", handleGameEvent);
+      socket.off("game:events", handleGameEvents);
       socket.off("game:error", handleGameError);
       socket.off("room:error", handleGameError);
     };
@@ -618,6 +651,24 @@ function App() {
                   Decir UNO
                 </button>
               </div>
+
+              <section className="event-history" aria-labelledby="events-title">
+                <h3 id="events-title">Eventos de la partida</h3>
+                {gameEvents.length > 0 ? (
+                  <ol>
+                    {gameEvents.map((event) => (
+                      <li key={event.id}>
+                        <time dateTime={event.createdAt}>
+                          {formatEventTime(event.createdAt)}
+                        </time>
+                        <span>{event.message}</span>
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p>No hay eventos todavia.</p>
+                )}
+              </section>
             </section>
             )
           ) : room ? (
