@@ -33,6 +33,7 @@ type GameTableProps = {
   onChallengeUno: (targetPlayerId: string) => void;
   onPauseGame: () => void;
   onResumeGame: () => void;
+  onLeaveRoom: () => void;
 };
 
 function formatEventTime(createdAt: string): string {
@@ -107,6 +108,7 @@ export function GameTable({
   onChallengeUno,
   onPauseGame,
   onResumeGame,
+  onLeaveRoom,
 }: GameTableProps) {
   const currentGamePlayer = gameState.players[gameState.currentPlayerIndex];
   const localPlayerId = currentPlayer?.id;
@@ -139,6 +141,7 @@ export function GameTable({
           onResolveDrawStack={onResolveDrawStack}
           onPauseGame={onPauseGame}
           onResumeGame={onResumeGame}
+          onLeaveRoom={onLeaveRoom}
         />
       </div>
 

@@ -222,6 +222,53 @@ export function registerGameSocket(io: Server): void {
       }
     });
 
+    socket.on("room:leave", (payload: unknown) => {
+      try {
+        const roomId = readRequiredString(
+          readPayloadField(payload, "roomId"),
+          "roomId",
+        );
+
+        const result = roomManager.leaveRoom(roomId, socket.id);
+
+        socket.leave(roomId);
+        socket.emit("room:left", { roomId });
+
+        if (!result.room) {
+          console.log(
+            `[ROOM LEAVE] ${result.player.name} salió de la sala ${roomId}. Sala eliminada.`,
+          );
+          return;
+        }
+
+        console.log(
+          `[ROOM LEAVE] ${result.player.name} salió de la sala ${result.room.id}`,
+        );
+
+        io.to(result.room.id).emit("room:updated", {
+          ...result.room,
+          game: null,
+        });
+
+        if (result.started && result.room.paused) {
+          io.to(result.room.id).emit("game:paused", {
+            roomId: result.room.id,
+            reason: result.room.pauseReason,
+            pauseType: result.room.pauseType,
+          });
+
+          emitGameEvent(
+            io,
+            result.room.id,
+            "connection",
+            `${result.player.name} se desconectÃ³. La partida fue pausada.`,
+          );
+        }
+      } catch (error) {
+        emitGameError(socket, error);
+      }
+    });
+
     socket.on("game:start", (payload: unknown) => {
       try {
         const roomId = readRequiredString(

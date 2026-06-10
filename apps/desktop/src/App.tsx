@@ -126,6 +126,16 @@ function App() {
       setMessage("");
     };
 
+    const handleRoomLeft = () => {
+      setRoom(null);
+      setGameState(null);
+      setPendingWildCard(null);
+      setGameEvents([]);
+      setUnoAlert(null);
+      setIsReconnecting(false);
+      setMessage("");
+    };
+
     const handleGameStarted = (startedGame: GameState) => {
       setGameState(startedGame);
       setPendingWildCard(null);
@@ -217,6 +227,7 @@ function App() {
     socket.on("room:joined", handleRoomJoined);
     socket.on("room:updated", handleRoomUpdated);
     socket.on("room:reconnected", handleRoomReconnected);
+    socket.on("room:left", handleRoomLeft);
     socket.on("game:started", handleGameStarted);
     socket.on("game:updated", handleGameUpdated);
     socket.on("game:finished", handleGameFinished);
@@ -239,6 +250,7 @@ function App() {
       socket.off("room:joined", handleRoomJoined);
       socket.off("room:updated", handleRoomUpdated);
       socket.off("room:reconnected", handleRoomReconnected);
+      socket.off("room:left", handleRoomLeft);
       socket.off("game:started", handleGameStarted);
       socket.off("game:updated", handleGameUpdated);
       socket.off("game:finished", handleGameFinished);
@@ -302,6 +314,27 @@ function App() {
     socket.emit("room:reconnect", {
       playerName: trimmedPlayerName,
       roomId: trimmedRoomId,
+    });
+  };
+
+  const handleLeaveRoom = () => {
+    if (!room) {
+      return;
+    }
+
+    if (room.started || (gameState && !isGameFinished)) {
+      const shouldLeave = window.confirm(
+        "Si sales durante la partida, quedarás como desconectado y la partida se pausará. Podrás reconectarte usando tu nombre exacto y el código de sala. ¿Quieres salir?",
+      );
+
+      if (!shouldLeave) {
+        return;
+      }
+    }
+
+    setMessage("");
+    socket.emit("room:leave", {
+      roomId: room.id,
     });
   };
 
@@ -479,6 +512,7 @@ function App() {
                 onChallengeUno={handleChallengeUno}
                 onPauseGame={handlePauseGame}
                 onResumeGame={handleResumeGame}
+                onLeaveRoom={handleLeaveRoom}
               />
             )
           ) : room ? (
@@ -520,6 +554,14 @@ function App() {
                   Iniciar partida
                 </button>
               )}
+
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={handleLeaveRoom}
+              >
+                Salir de sala
+              </button>
             </section>
           ) : (
             <>

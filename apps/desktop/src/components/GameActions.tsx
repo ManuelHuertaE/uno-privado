@@ -10,6 +10,7 @@ type GameActionsProps = {
   onResolveDrawStack: () => void;
   onPauseGame: () => void;
   onResumeGame: () => void;
+  onLeaveRoom: () => void;
 };
 
 export function GameActions({
@@ -24,6 +25,7 @@ export function GameActions({
   onResolveDrawStack,
   onPauseGame,
   onResumeGame,
+  onLeaveRoom,
 }: GameActionsProps) {
   const actionsDisabled = isPaused || isFinished;
 
@@ -66,6 +68,16 @@ export function GameActions({
               Pausar partida
             </button>
           ))}
+
+        {!isFinished && (
+          <button
+            className="leave-room-button"
+            type="button"
+            onClick={onLeaveRoom}
+          >
+            Salir de sala
+          </button>
+        )}
       </div>
     </section>
   );

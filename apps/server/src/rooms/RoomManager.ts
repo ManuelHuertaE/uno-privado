@@ -12,6 +12,12 @@ import type { CardColor, GameEvent } from "@uno/shared";
 const MAX_GAME_EVENTS = 30;
 const MAX_ROOM_PLAYERS = 4;
 
+type LeaveRoomResult = {
+  player: RoomPlayer;
+  room?: Room;
+  started: boolean;
+};
+
 function createShortId(): string {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
 }
@@ -34,6 +40,82 @@ function createGameEventId(): string {
 
 export class RoomManager {
   private readonly rooms = new Map<string, Room>();
+
+  private removePlayerFromRoom(
+    room: Room,
+    socketId: string,
+    clearSocketId = false,
+  ): LeaveRoomResult {
+    const playerIndex = room.players.findIndex(
+      (player) => player.socketId === socketId,
+    );
+
+    if (playerIndex === -1) {
+      throw new Error("No perteneces a esta sala.");
+    }
+
+    const leavingPlayer = room.players[playerIndex];
+
+    if (room.started) {
+      const players = clearSocketId
+        ? room.players.map((player) =>
+            player.id === leavingPlayer.id
+              ? { ...player, socketId: "" }
+              : player,
+          )
+        : room.players;
+
+      const disconnectedPlayerIds = room.disconnectedPlayerIds.includes(
+        leavingPlayer.id,
+      )
+        ? room.disconnectedPlayerIds
+        : [...room.disconnectedPlayerIds, leavingPlayer.id];
+
+      const updatedRoom: Room = {
+        ...room,
+        players,
+        paused: true,
+        pauseReason: "Jugador desconectado",
+        pauseType: "disconnect",
+        disconnectedPlayerIds,
+      };
+
+      this.rooms.set(room.id, updatedRoom);
+
+      return {
+        player: leavingPlayer,
+        room: updatedRoom,
+        started: true,
+      };
+    }
+
+    const players = room.players.filter(
+      (player) => player.socketId !== socketId,
+    );
+
+    if (players.length === 0) {
+      this.rooms.delete(room.id);
+
+      return {
+        player: leavingPlayer,
+        started: false,
+      };
+    }
+
+    const updatedRoom: Room = {
+      ...room,
+      hostId: room.hostId === leavingPlayer.id ? players[0].id : room.hostId,
+      players,
+    };
+
+    this.rooms.set(room.id, updatedRoom);
+
+    return {
+      player: leavingPlayer,
+      room: updatedRoom,
+      started: false,
+    };
+  }
 
   private hasPlayerWithSocket(socketId: string): boolean {
     for (const room of this.rooms.values()) {
@@ -112,57 +194,26 @@ export class RoomManager {
     return this.rooms.get(roomId);
   }
 
+  leaveRoom(roomId: string, socketId: string): LeaveRoomResult {
+    const room = this.rooms.get(roomId);
+
+    if (!room) {
+      throw new Error("La sala no existe.");
+    }
+
+    return this.removePlayerFromRoom(room, socketId, true);
+  }
+
   removePlayerBySocket(socketId: string): Room | undefined {
     for (const room of this.rooms.values()) {
-      const playerIndex = room.players.findIndex(
+      const hasPlayer = room.players.some(
         (player) => player.socketId === socketId,
       );
 
-      if (playerIndex === -1) {
-        continue;
+      if (hasPlayer) {
+        const result = this.removePlayerFromRoom(room, socketId);
+        return result.room;
       }
-
-      const disconnectedPlayer = room.players[playerIndex];
-
-      if (room.started) {
-        const disconnectedPlayerIds = room.disconnectedPlayerIds.includes(
-          disconnectedPlayer.id,
-        )
-          ? room.disconnectedPlayerIds
-          : [...room.disconnectedPlayerIds, disconnectedPlayer.id];
-
-        const updatedRoom: Room = {
-          ...room,
-          paused: true,
-          pauseReason: "Jugador desconectado",
-          pauseType: "disconnect",
-          disconnectedPlayerIds,
-        };
-
-        this.rooms.set(room.id, updatedRoom);
-
-        return updatedRoom;
-      }
-
-      const players = room.players.filter(
-        (player) => player.socketId !== socketId,
-      );
-
-      if (players.length === 0) {
-        this.rooms.delete(room.id);
-        return undefined;
-      }
-
-      const updatedRoom: Room = {
-        ...room,
-        hostId:
-          room.hostId === disconnectedPlayer.id ? players[0].id : room.hostId,
-        players,
-      };
-
-      this.rooms.set(room.id, updatedRoom);
-
-      return updatedRoom;
     }
 
     return undefined;

@@ -122,6 +122,14 @@ button:disabled {
   background: #b91c1c;
 }
 
+.secondary-button {
+  background: #334155;
+}
+
+.secondary-button:hover:not(:disabled) {
+  background: #475569;
+}
+
 .join-section {
   display: flex;
   flex-direction: column;
@@ -535,6 +543,14 @@ button:disabled {
 
 .table-action-buttons .draw-action-button.is-stack:hover:not(:disabled) {
   background: linear-gradient(135deg, #f87171, #dc2626);
+}
+
+.table-action-buttons .leave-room-button {
+  background: #334155;
+}
+
+.table-action-buttons .leave-room-button:hover:not(:disabled) {
+  background: #475569;
 }
 
 .uno-table-layout {
