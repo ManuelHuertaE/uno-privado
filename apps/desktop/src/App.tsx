@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { io } from "socket.io-client";
+import type { Socket } from "socket.io-client";
 import { FinalGameScreen } from "./components/FinalGameScreen";
 import { GameTable } from "./components/GameTable";
 import type {
@@ -11,6 +12,11 @@ import type {
   PlayableColor,
   Room,
 } from "./components/gameTypes";
+import {
+  DEFAULT_SERVER_URL,
+  getStoredServerUrl,
+  saveServerUrl,
+} from "./lib/serverConfig";
 import "./App.css";
 
 type ServerError = {
@@ -23,20 +29,25 @@ type PauseEvent = {
   pauseType?: "manual" | "disconnect";
 };
 
-const socket = io("http://localhost:3000");
 const MAX_ROOM_PLAYERS = 4;
+type ConnectionStatus = "connecting" | "connected" | "disconnected" | "error";
 
 function isWildCard(card: Card): boolean {
   return card.value === "wild" || card.value === "wildDraw4";
 }
 
 function App() {
+  const [serverUrl, setServerUrl] = useState(getStoredServerUrl);
+  const [serverUrlInput, setServerUrlInput] = useState(serverUrl);
+  const [connectionStatus, setConnectionStatus] =
+    useState<ConnectionStatus>("connecting");
+  const [socket, setSocket] = useState<Socket>(() => io(serverUrl));
   const [playerName, setPlayerName] = useState("");
   const [roomId, setRoomId] = useState("");
   const [message, setMessage] = useState("");
   const [room, setRoom] = useState<Room | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
-  const [socketId, setSocketId] = useState(socket.id);
+  const [socketId, setSocketId] = useState<string | undefined>(socket.id);
   const [pendingWildCard, setPendingWildCard] = useState<Card | null>(null);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [gameEvents, setGameEvents] = useState<GameEvent[]>([]);
@@ -44,8 +55,12 @@ function App() {
 
   const trimmedPlayerName = playerName.trim();
   const trimmedRoomId = roomId.trim();
-  const canCreateRoom = trimmedPlayerName.length > 0;
-  const canJoinRoom = canCreateRoom && trimmedRoomId.length > 0;
+  const isSocketConnected = connectionStatus === "connected";
+  const canCreateRoom = trimmedPlayerName.length > 0 && isSocketConnected;
+  const canJoinRoom =
+    trimmedPlayerName.length > 0 &&
+    trimmedRoomId.length > 0 &&
+    isSocketConnected;
   const canReconnectRoom = canJoinRoom && !isReconnecting;
   const currentPlayer = room?.players.find(
     (player) => player.socketId === socketId,
@@ -82,12 +97,23 @@ function App() {
   );
 
   useEffect(() => {
+    setConnectionStatus(socket.connected ? "connected" : "connecting");
+    setSocketId(socket.id);
+
     const handleConnect = () => {
       setSocketId(socket.id);
+      setConnectionStatus("connected");
     };
 
     const handleDisconnect = () => {
       setSocketId(undefined);
+      setConnectionStatus("disconnected");
+    };
+
+    const handleConnectError = () => {
+      setSocketId(undefined);
+      setConnectionStatus("error");
+      setMessage("No se pudo conectar al servidor.");
     };
 
     const handleRoomCreated = (createdRoom: Room) => {
@@ -223,6 +249,7 @@ function App() {
 
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
+    socket.on("connect_error", handleConnectError);
     socket.on("room:created", handleRoomCreated);
     socket.on("room:joined", handleRoomJoined);
     socket.on("room:updated", handleRoomUpdated);
@@ -241,11 +268,13 @@ function App() {
 
     if (socket.connected) {
       setSocketId(socket.id);
+      setConnectionStatus("connected");
     }
 
     return () => {
       socket.off("connect", handleConnect);
       socket.off("disconnect", handleDisconnect);
+      socket.off("connect_error", handleConnectError);
       socket.off("room:created", handleRoomCreated);
       socket.off("room:joined", handleRoomJoined);
       socket.off("room:updated", handleRoomUpdated);
@@ -262,7 +291,7 @@ function App() {
       socket.off("game:error", handleGameError);
       socket.off("room:error", handleGameError);
     };
-  }, []);
+  }, [socket]);
 
   useEffect(() => {
     if (!unoAlert) {
@@ -279,6 +308,13 @@ function App() {
   }, [unoAlert]);
 
   const handleCreateRoom = () => {
+    if (!isSocketConnected) {
+      setMessage(
+        "No hay conexión con el servidor. Configura o inicia el servidor antes de continuar.",
+      );
+      return;
+    }
+
     if (!canCreateRoom) {
       setMessage("Escribe tu nombre para crear una partida.");
       return;
@@ -291,6 +327,13 @@ function App() {
   };
 
   const handleJoinRoom = () => {
+    if (!isSocketConnected) {
+      setMessage(
+        "No hay conexión con el servidor. Configura o inicia el servidor antes de continuar.",
+      );
+      return;
+    }
+
     if (!canJoinRoom) {
       setMessage("Escribe tu nombre y el codigo de sala para unirte.");
       return;
@@ -304,6 +347,13 @@ function App() {
   };
 
   const handleReconnectRoom = () => {
+    if (!isSocketConnected) {
+      setMessage(
+        "No hay conexión con el servidor. Configura o inicia el servidor antes de continuar.",
+      );
+      return;
+    }
+
     if (!canJoinRoom) {
       setMessage("Escribe tu nombre y el codigo de sala para reconectar.");
       return;
@@ -315,6 +365,50 @@ function App() {
       playerName: trimmedPlayerName,
       roomId: trimmedRoomId,
     });
+  };
+
+  const handleSaveServerUrl = () => {
+    try {
+      const normalizedUrl = saveServerUrl(serverUrlInput);
+      const nextSocket = io(normalizedUrl, { autoConnect: false });
+
+      socket.disconnect();
+      nextSocket.connect();
+      setRoom(null);
+      setGameState(null);
+      setPendingWildCard(null);
+      setGameEvents([]);
+      setUnoAlert(null);
+      setIsReconnecting(false);
+      setSocketId(undefined);
+      setServerUrl(normalizedUrl);
+      setServerUrlInput(normalizedUrl);
+      setConnectionStatus("connecting");
+      setSocket(nextSocket);
+      setMessage("Servidor guardado correctamente.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "La URL del servidor no es válida.",
+      );
+    }
+  };
+
+  const getConnectionStatusLabel = (): string => {
+    if (connectionStatus === "connecting") {
+      return "Conectando...";
+    }
+
+    if (connectionStatus === "connected") {
+      return "Conectado";
+    }
+
+    if (connectionStatus === "error") {
+      return "Error de conexión";
+    }
+
+    return "Desconectado";
   };
 
   const handleLeaveRoom = () => {
@@ -565,6 +659,51 @@ function App() {
             </section>
           ) : (
             <>
+              <section className="lan-config-section" aria-labelledby="lan-title">
+                <div>
+                  <h2 id="lan-title">Configuración LAN</h2>
+                  <p>
+                    Para jugar en LAN, una computadora debe ejecutar el servidor.
+                    Los demás jugadores deben escribir la IP de esa computadora,
+                    por ejemplo http://192.168.1.100:3000.
+                  </p>
+                </div>
+
+                <label className="field">
+                  <span>Servidor</span>
+                  <input
+                    type="text"
+                    value={serverUrlInput}
+                    onChange={(event) => {
+                      setServerUrlInput(event.target.value);
+                      setMessage("");
+                    }}
+                    placeholder={DEFAULT_SERVER_URL}
+                  />
+                </label>
+
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={handleSaveServerUrl}
+                >
+                  Guardar servidor
+                </button>
+
+                <div className="server-status-panel">
+                  <div>
+                    <span>Servidor actual</span>
+                    <strong>{serverUrl}</strong>
+                  </div>
+                  <div>
+                    <span>Estado</span>
+                    <strong className={`connection-status ${connectionStatus}`}>
+                      {getConnectionStatusLabel()}
+                    </strong>
+                  </div>
+                </div>
+              </section>
+
               <label className="field">
                 <span>Nombre del jugador</span>
                 <input
@@ -585,6 +724,11 @@ function App() {
                 type="button"
                 onClick={handleCreateRoom}
                 disabled={!canCreateRoom}
+                title={
+                  isSocketConnected
+                    ? undefined
+                    : "No hay conexión con el servidor."
+                }
               >
                 Crear partida
               </button>
@@ -609,7 +753,15 @@ function App() {
                   />
                 </label>
 
-                <button type="submit" disabled={!canJoinRoom}>
+                <button
+                  type="submit"
+                  disabled={!canJoinRoom}
+                  title={
+                    isSocketConnected
+                      ? undefined
+                      : "No hay conexión con el servidor."
+                  }
+                >
                   Unirse a partida
                 </button>
               </form>
@@ -629,6 +781,11 @@ function App() {
                   type="button"
                   onClick={handleReconnectRoom}
                   disabled={!canReconnectRoom}
+                  title={
+                    isSocketConnected
+                      ? undefined
+                      : "No hay conexión con el servidor."
+                  }
                 >
                   {isReconnecting ? "Reconectando..." : "Reconectar a partida"}
                 </button>
