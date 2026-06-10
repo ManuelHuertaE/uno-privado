@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { networkInterfaces } from "node:os";
 import cors from "cors";
 import express from "express";
 import { Server } from "socket.io";
@@ -6,6 +7,8 @@ import { createGame, getPlayerView, playCard } from "@uno/game-core";
 import { registerGameSocket } from "./socket/registerGameSocket";
 
 const app = express();
+const PORT = 3000;
+const HOST = "0.0.0.0";
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
@@ -16,6 +19,21 @@ const io = new Server(httpServer, {
 app.use(cors());
 
 registerGameSocket(io);
+
+function getLanUrls(port: number): string[] {
+  const interfaces = networkInterfaces();
+  const urls: string[] = [];
+
+  for (const addresses of Object.values(interfaces)) {
+    for (const address of addresses ?? []) {
+      if (address.family === "IPv4" && !address.internal) {
+        urls.push(`http://${address.address}:${port}`);
+      }
+    }
+  }
+
+  return urls;
+}
 
 function createTestGame() {
   return createGame({
@@ -230,6 +248,19 @@ app.get("/test-game-state", (_req, res) => {
   });
 });
 
-httpServer.listen(3000, () => {
-  console.log("Servidor iniciado en puerto 3000");
+httpServer.listen(PORT, HOST, () => {
+  console.log(`Servidor iniciado en puerto ${PORT}`);
+  console.log(`URL local: http://localhost:${PORT}`);
+
+  const lanUrls = getLanUrls(PORT);
+
+  if (lanUrls.length === 0) {
+    console.log("No se encontraron IPs LAN disponibles.");
+    return;
+  }
+
+  console.log("IPs LAN disponibles:");
+  for (const url of lanUrls) {
+    console.log(`- ${url}`);
+  }
 });
