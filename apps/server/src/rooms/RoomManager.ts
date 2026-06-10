@@ -10,6 +10,7 @@ import type { Room, RoomPlayer } from "./types";
 import type { CardColor, GameEvent } from "@uno/shared";
 
 const MAX_GAME_EVENTS = 30;
+const MAX_ROOM_PLAYERS = 4;
 
 function createShortId(): string {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -87,6 +88,10 @@ export class RoomManager {
 
     if (room.started) {
       throw new Error("La sala ya inicio.");
+    }
+
+    if (room.players.length >= MAX_ROOM_PLAYERS) {
+      throw new Error("La sala ya alcanzó el máximo de 4 jugadores.");
     }
 
     if (this.hasPlayerWithSocket(socketId)) {

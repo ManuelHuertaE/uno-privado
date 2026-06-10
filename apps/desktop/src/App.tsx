@@ -24,6 +24,7 @@ type PauseEvent = {
 };
 
 const socket = io("http://localhost:3000");
+const MAX_ROOM_PLAYERS = 4;
 
 function isWildCard(card: Card): boolean {
   return card.value === "wild" || card.value === "wildDraw4";
@@ -51,6 +52,7 @@ function App() {
   );
   const isHost = Boolean(currentPlayer && currentPlayer.id === room?.hostId);
   const canStartGame = Boolean(isHost && room && room.players.length >= 2);
+  const isLobbyFull = Boolean(room && room.players.length >= MAX_ROOM_PLAYERS);
   const isRoomPaused = Boolean(room?.paused);
   const disconnectedPlayerIds = room?.disconnectedPlayerIds ?? [];
   const disconnectedPlayers =
@@ -488,7 +490,15 @@ function App() {
 
               <div>
                 <h2 id="lobby-title">Lobby</h2>
-                <p>Jugadores en la sala</p>
+                <p
+                  className={
+                    isLobbyFull ? "lobby-capacity is-full" : "lobby-capacity"
+                  }
+                >
+                  {isLobbyFull
+                    ? `Sala llena (${room.players.length}/${MAX_ROOM_PLAYERS})`
+                    : `Jugadores en la sala (${room.players.length}/${MAX_ROOM_PLAYERS})`}
+                </p>
               </div>
 
               <ul className="player-list">

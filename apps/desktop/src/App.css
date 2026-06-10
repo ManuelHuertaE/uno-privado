@@ -225,6 +225,11 @@ button:disabled {
   font-size: 0.94rem;
 }
 
+.lobby-capacity.is-full {
+  color: #991b1b;
+  font-weight: 800;
+}
+
 .game-section {
   display: flex;
   flex-direction: column;
