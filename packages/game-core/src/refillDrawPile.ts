@@ -2,11 +2,11 @@ import type { GameState } from "@uno/shared";
 import { shuffleDeck } from "./shuffleDeck";
 
 export function refillDrawPile(game: GameState): GameState {
-  if (game.drawPile.length > 0) {
-    return game;
-  }
-
   if (game.discardPile.length <= 1) {
+    if (game.drawPile.length > 0) {
+      return game;
+    }
+
     throw new Error("No hay suficientes cartas para rellenar el mazo.");
   }
 
@@ -20,7 +20,7 @@ export function refillDrawPile(game: GameState): GameState {
 
   return {
     ...game,
-    drawPile: shuffleDeck(cardsToRecycle),
+    drawPile: [...game.drawPile, ...shuffleDeck(cardsToRecycle)],
     discardPile: [topCard],
   };
 }
